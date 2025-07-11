@@ -20,6 +20,10 @@ inputs:
     description: '--stack-config for testing'
     required: false
     default: 'starter'
+  inference_provider:
+    description: "Inference provider to use for testing"
+    required: false
+    default: 'fireworks'
   llama_stack_only:
     description: 'Only cut a llama-stack release candidate'
     required: false
@@ -75,6 +79,7 @@ runs:
         COMMIT_ID: ${{ inputs.commit_id }}
         CLIENT_PYTHON_COMMIT_ID: ${{ inputs.client_python_commit_id }}
         TEMPLATE: ${{ inputs.template }}
+        INFERENCE_PROVIDER: ${{ inputs.inference_provider }}
         CUT_MODE: ${{ inputs.cut_mode }}
         LLAMA_STACK_ONLY: ${{ inputs.llama_stack_only }}
         TOGETHER_API_KEY: ${{ inputs.together_api_key }}

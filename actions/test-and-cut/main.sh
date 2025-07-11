@@ -18,6 +18,8 @@ GITHUB_TOKEN=${GITHUB_TOKEN:-}
 CUT_MODE=${CUT_MODE:-test-and-cut}
 LLAMA_STACK_ONLY=${LLAMA_STACK_ONLY:-false}
 TEMPLATE=${TEMPLATE:-starter}
+INFERENCE_PROVIDER=${INFERENCE_PROVIDER:-fireworks}
+SAFETY_MODEL=${SAFETY_MODEL:-llama-guard3:1b}
 
 source $(dirname $0)/../common.sh
 
@@ -112,12 +114,15 @@ test_llama_cli() {
 run_integration_tests() {
   stack_config=$1
   shift
-  ENABLE_FIREWORKS=fireworks ENABLE_TOGETHER=together LLAMA_STACK_TEST_INTERVAL_SECONDS=3 pytest -s -v llama-stack/tests/integration/ \
+  ENABLE_OLLAMA=ollama ENABLE_FIREWORKS=fireworks ENABLE_TOGETHER=together \
+  LLAMA_STACK_TEST_INTERVAL_SECONDS=3 \
+  SAFETY_MODEL=$SAFETY_MODEL \
+  pytest -s -v llama-stack/tests/integration/ \
     --stack-config $stack_config \
     -k "not(supervised_fine_tune or builtin_tool_code or safety_with_image or code_interpreter_for or rag_and_code or truncation or register_and_unregister)" \
-    --text-model meta-llama/Llama-3.3-70B-Instruct \
-    --vision-model meta-llama/Llama-4-Scout-17B-16E-Instruct \
-    --safety-shield meta-llama/Llama-Guard-3-8B \
+    --text-model $INFERENCE_PROVIDER/meta-llama/Llama-3.3-70B-Instruct \
+    --vision-model $INFERENCE_PROVIDER/meta-llama/Llama-4-Scout-17B-16E-Instruct \
+    --safety-shield $SAFETY_MODEL \
     --embedding-model all-MiniLM-L6-v2
 }
 
@@ -154,6 +159,8 @@ test_docker() {
   docker run -d --name llama-stack-$TEMPLATE -p $LLAMA_STACK_PORT:$LLAMA_STACK_PORT \
     -e ENABLE_FIREWORKS=fireworks \
     -e ENABLE_TOGETHER=together \
+    -e ENABLE_OLLAMA=ollama \
+    -e SAFETY_MODEL=$SAFETY_MODEL \
     -e TOGETHER_API_KEY=$TOGETHER_API_KEY \
     -e FIREWORKS_API_KEY=$FIREWORKS_API_KEY \
     -e TAVILY_SEARCH_API_KEY=$TAVILY_SEARCH_API_KEY \

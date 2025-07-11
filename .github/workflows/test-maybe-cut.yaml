@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       commit_id:
-        description: 'Commit ID'
+        description: 'llama-stack commit ID'
         required: true
       client_python_commit_id:
         description: 'llama-stack-client-python commit ID'
@@ -25,6 +25,11 @@ on:
         required: false
         type: string
         default: 'starter'
+      inference_provider:
+        description: 'Inference provider to use for testing'
+        required: false
+        type: string
+        default: 'fireworks'
   schedule:
     - cron: "0 0 * * *"  # Run every day at midnight
 
@@ -61,12 +66,15 @@ jobs:
           echo "cut_mode=${{ steps.inputs.outputs.cut_mode }}" >> $GITHUB_OUTPUT
         fi
       shell: bash
+    - name: Setup Ollama
+      uses: ./actions/setup-ollama
     - uses: ./actions/test-and-cut
       with:
         version: ${{ steps.version.outputs.value }}
         commit_id: ${{ steps.inputs.outputs.commit_id }}
         client_python_commit_id: ${{ steps.inputs.outputs.client_python_commit_id }}
         template: ${{ inputs.template }}
+        inference_provider: ${{ inputs.inference_provider }}
         cut_mode: ${{ steps.version.outputs.cut_mode }}
         fireworks_api_key: ${{ secrets.FIREWORKS_API_KEY }}
         together_api_key: ${{ secrets.TOGETHER_API_KEY }}
