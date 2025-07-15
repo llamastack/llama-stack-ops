@@ -66,8 +66,6 @@ jobs:
           echo "cut_mode=${{ steps.inputs.outputs.cut_mode }}" >> $GITHUB_OUTPUT
         fi
       shell: bash
-    - name: Setup Ollama
-      uses: ./actions/setup-ollama
     - uses: ./actions/test-and-cut
       with:
         version: ${{ steps.version.outputs.value }}
