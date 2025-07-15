@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version (e.g. 0.1.1rc2, 0.1.1.dev20250201)'
+        description: 'Version (e.g. 0.1.1rc2)'
         required: true
         type: string
       commit_id:
@@ -12,7 +12,7 @@ on:
         required: false
         type: string
       inference_provider:
-        description: 'Inference provider to use for the release candidate (fireworks, together) (default: fireworks)'
+        description: 'Inference provider (fireworks, together)'
         required: false
         type: string
         default: 'fireworks'
@@ -21,7 +21,7 @@ on:
         type: string
         default: 'test-and-cut'
       llama_stack_only:
-        description: 'Only cut a llama-stack release candidate (default: false)'
+        description: 'Only cut a llama-stack release candidate'
         required: false
         type: boolean
         default: false
