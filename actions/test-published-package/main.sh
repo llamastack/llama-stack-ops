@@ -72,6 +72,7 @@ cd llama-stack
 git fetch origin refs/tags/v${VERSION}:refs/tags/v${VERSION}
 git checkout -b cut-${VERSION} refs/tags/v${VERSION}
 
+cd ..
 echo "Running integration tests"
 run_integration_tests $TEMPLATE $INFERENCE_PROVIDER $SAFETY_MODEL
 
