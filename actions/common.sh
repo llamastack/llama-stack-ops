@@ -12,7 +12,10 @@ run_integration_tests() {
   inference_provider=$2
   safety_model=$3
 
-  ENABLE_OLLAMA=ollama ENABLE_FIREWORKS=fireworks ENABLE_TOGETHER=together \
+  ENABLE_OLLAMA=ollama \
+  ENABLE_FIREWORKS=fireworks \
+  ENABLE_TOGETHER=together \
+  SAFETY_MODEL=$safety_model \
   LLAMA_STACK_TEST_INTERVAL_SECONDS=3 \
   pytest -s -v llama-stack/tests/integration/ \
     --stack-config $stack_config \
