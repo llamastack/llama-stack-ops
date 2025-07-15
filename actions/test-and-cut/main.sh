@@ -17,7 +17,6 @@ fi
 GITHUB_TOKEN=${GITHUB_TOKEN:-}
 CUT_MODE=${CUT_MODE:-test-and-cut}
 LLAMA_STACK_ONLY=${LLAMA_STACK_ONLY:-false}
-TEMPLATE=${TEMPLATE:-starter}
 INFERENCE_PROVIDER=${INFERENCE_PROVIDER:-fireworks}
 SAFETY_MODEL=${SAFETY_MODEL:-llama-guard3:1b}
 
@@ -38,6 +37,8 @@ is_truthy() {
   *) return 1 ;;
   esac
 }
+
+TEMPLATE=starter
 
 setup_ollama
 

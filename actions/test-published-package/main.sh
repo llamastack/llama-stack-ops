@@ -5,7 +5,6 @@ if [ -z "$VERSION" ]; then
   exit 1
 fi
 
-TEMPLATE=${TEMPLATE:-starter}
 INFERENCE_PROVIDER=${INFERENCE_PROVIDER:-fireworks}
 SAFETY_MODEL=${SAFETY_MODEL:-llama-guard3:1b}
 
@@ -20,6 +19,8 @@ if ! git ls-remote --tags https://github.com/meta-llama/llama-stack.git "refs/ta
 fi
 
 setup_ollama
+
+TEMPLATE=starter
 
 TMPDIR=$(mktemp -d)
 cd $TMPDIR

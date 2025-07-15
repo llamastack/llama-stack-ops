@@ -16,10 +16,6 @@ inputs:
     description: 'Mode to run the script in (test-and-cut, test-only, cut-only)'
     required: false
     default: 'test-and-cut'
-  template:
-    description: '--stack-config for testing'
-    required: false
-    default: 'starter'
   inference_provider:
     description: "Inference provider to use for testing"
     required: false
@@ -78,7 +74,6 @@ runs:
         VERSION: ${{ inputs.version }}
         COMMIT_ID: ${{ inputs.commit_id }}
         CLIENT_PYTHON_COMMIT_ID: ${{ inputs.client_python_commit_id }}
-        TEMPLATE: ${{ inputs.template }}
         INFERENCE_PROVIDER: ${{ inputs.inference_provider }}
         CUT_MODE: ${{ inputs.cut_mode }}
         LLAMA_STACK_ONLY: ${{ inputs.llama_stack_only }}
