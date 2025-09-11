@@ -53,7 +53,30 @@ build_and_push_docker() {
   else
     PYPI_VERSION=${VERSION} llama stack build --distro $distro --image-type container
   fi
-  docker images
+
+  TMP_BUILD_DIR=$(mktemp -d)
+  CONTAINERFILE="$TMP_BUILD_DIR/Containerfile"
+  cat > "$CONTAINERFILE" << EOF
+FROM distribution-$distro:$( [ "$PYPI_SOURCE" = "testpypi" ] && echo "test-${VERSION}" || echo "${VERSION}" )
+USER root
+
+# Create group with GID 1001 and user with UID 1001
+RUN groupadd -g 1001 appgroup && useradd -u 1001 -g appgroup -M appuser
+
+# Create necessary directories with appropriate permissions for UID 1001
+RUN mkdir -p /.llama /.cache && chown -R 1001:1001 /.llama /.cache && chmod -R 775 /.llama /.cache && chmod -R g+w /app
+
+# Set the Llama Stack config directory environment variable to use /.llama
+ENV LLAMA_STACK_CONFIG_DIR=/.llama
+ENV HOME=/
+
+USER 1001
+EOF
+
+  docker build -t distribution-$distro:$( [ "$PYPI_SOURCE" = "testpypi" ] && echo "test-${VERSION}" || echo "${VERSION}" ) -f "$CONTAINERFILE" "$TMP_BUILD_DIR"
+  rm -rf "$TMP_BUILD_DIR"
+
+  docker images | cat
 
   echo "Pushing docker image"
   if [ "$PYPI_SOURCE" = "testpypi" ]; then
