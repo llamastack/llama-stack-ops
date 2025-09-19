@@ -25,8 +25,8 @@ on:
         required: false
         type: boolean
         default: false
-#  schedule:
-#    - cron: "0 4 * * *"  # Run every day at 4 AM UTC
+  schedule:
+    - cron: "0 4 * * *"  # Run every day at 4 AM UTC
 
 jobs:
   generate-version:
@@ -48,14 +48,18 @@ jobs:
           git clone --depth 1 "https://x-access-token:${{ secrets.LLAMA_REPOS_PAT }}@github.com/meta-llama/llama-stack.git" temp-version-check
           cd temp-version-check
 
-          # Extract version from pyproject.toml using tomli
+          # Extract version from pyproject.toml and increment patch version
           base_version=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          echo "Extracted version from pyproject.toml: $base_version"
+
+          # Increment patch version
+          incremented_version=$(python -c "version = '$base_version'; major, minor, patch = version.split('.'); print(f'{major}.{minor}.{int(patch) + 1}')")
 
           # Generate nightly version with date suffix
           date=$(date +%Y%m%d)
-          version="${base_version}-dev.${date}"
+          version="${incremented_version}-dev.${date}"
 
-          echo "Generated nightly version: $version (base: $base_version)"
+          echo "Generated nightly version: $version (incremented from base: $base_version to: $incremented_version)"
           echo "version=$version" >> $GITHUB_OUTPUT
         fi
 
@@ -102,3 +106,18 @@ jobs:
         # GitHub App setup that can be used instead
         github_token: ${{ secrets.LLAMA_REPOS_PAT }}
         npm_token: ${{ secrets.NPM_TOKEN }}
+
+  test-published-package:
+    needs:
+      - generate-version
+      - upload-packages-and-tag
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: ./actions/test-published-package
+      with:
+        version: ${{ needs.generate-version.outputs.version }}
+        inference_provider: ${{ inputs.inference_provider }}
+        together_api_key: ${{ secrets.TOGETHER_API_KEY }}
+        tavily_search_api_key: ${{ secrets.TAVILY_SEARCH_API_KEY }}
+        fireworks_api_key: ${{ secrets.FIREWORKS_API_KEY }}
