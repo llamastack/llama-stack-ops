@@ -135,6 +135,7 @@ test_docker() {
     -e OLLAMA_URL=http://localhost:11434 \
     -e SAFETY_MODEL=ollama/llama-guard3:1b \
     -e LLAMA_STACK_TEST_INFERENCE_MODE=replay \
+    -e LLAMA_STACK_TEST_STACK_CONFIG_TYPE=server \
     -e TOGETHER_API_KEY=$TOGETHER_API_KEY \
     -e FIREWORKS_API_KEY=$FIREWORKS_API_KEY \
     -e TAVILY_SEARCH_API_KEY=$TAVILY_SEARCH_API_KEY \
