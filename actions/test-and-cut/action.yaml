@@ -76,15 +76,18 @@ runs:
         TAVILY_SEARCH_API_KEY: ${{ inputs.tavily_search_api_key }}
         FIREWORKS_API_KEY: ${{ inputs.fireworks_api_key }}
         GITHUB_TOKEN: ${{ inputs.github_token }}
+        LLAMA_STACK_LOG_FILE: server.log
+        LLAMA_STACK_CLIENT_LOG_FILE: client.log
       run: |
         chmod +x ${{ github.action_path }}/main.sh
         ${{ github.action_path }}/main.sh
 
-    - name: Print server logs
+    - name: Print server and client logs
       if: always()
       shell: bash
       run: |
         cat server.log || true
+        cat client.log || true
 
     - name: Upload server logs
       if: always()
