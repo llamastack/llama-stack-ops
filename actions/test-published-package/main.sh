@@ -51,8 +51,8 @@ test_llama_cli
 
 distros_to_build=("starter")
 for build_distro in "${distros_to_build[@]}"; do
-  echo "Building $build_distro distribution"
-  llama stack build --distro $build_distro --image-type venv
+  echo "Installing dependencies for $build_distro distribution"
+  llama stack list-deps $build_distro | xargs -L1 uv pip install
 done
 
 install_dependencies

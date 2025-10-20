@@ -48,16 +48,36 @@ build_and_push_docker() {
   distro=$1
 
   echo "Building and pushing docker for distro $distro"
+  
+  # Clone llama-stack repo to get the Containerfile
+  LLAMA_STACK_DIR=$(mktemp -d)
+  git clone --depth 1 https://github.com/llamastack/llama-stack.git "$LLAMA_STACK_DIR"
+  
+  # Determine the tag suffix and build args based on PyPI source
   if [ "$PYPI_SOURCE" = "testpypi" ]; then
-    TEST_PYPI_VERSION=${VERSION} llama stack build --distro $distro --image-type container
+    TAG_SUFFIX="test-${VERSION}"
+    docker build "$LLAMA_STACK_DIR" \
+      -f "$LLAMA_STACK_DIR/containers/Containerfile" \
+      --build-arg DISTRO_NAME=$distro \
+      --build-arg INSTALL_MODE=test-pypi \
+      --build-arg TEST_PYPI_VERSION=${VERSION} \
+      -t distribution-$distro:$TAG_SUFFIX
   else
-    PYPI_VERSION=${VERSION} llama stack build --distro $distro --image-type container
+    TAG_SUFFIX="${VERSION}"
+    docker build "$LLAMA_STACK_DIR" \
+      -f "$LLAMA_STACK_DIR/containers/Containerfile" \
+      --build-arg DISTRO_NAME=$distro \
+      --build-arg PYPI_VERSION=${VERSION} \
+      -t distribution-$distro:$TAG_SUFFIX
   fi
 
+  rm -rf "$LLAMA_STACK_DIR"
+
+  # Build a second layer for OpenShift compatibility
   TMP_BUILD_DIR=$(mktemp -d)
   CONTAINERFILE="$TMP_BUILD_DIR/Containerfile"
   cat > "$CONTAINERFILE" << EOF
-FROM distribution-$distro:$( [ "$PYPI_SOURCE" = "testpypi" ] && echo "test-${VERSION}" || echo "${VERSION}" )
+FROM distribution-$distro:$TAG_SUFFIX
 USER root
 
 # Create group with GID 1001 and user with UID 1001
@@ -73,7 +93,7 @@ ENV HOME=/
 USER 1001
 EOF
 
-  docker build -t distribution-$distro:$( [ "$PYPI_SOURCE" = "testpypi" ] && echo "test-${VERSION}" || echo "${VERSION}" ) -f "$CONTAINERFILE" "$TMP_BUILD_DIR"
+  docker build -t distribution-$distro:$TAG_SUFFIX -f "$CONTAINERFILE" "$TMP_BUILD_DIR"
   rm -rf "$TMP_BUILD_DIR"
 
   docker images | cat
