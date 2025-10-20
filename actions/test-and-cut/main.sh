@@ -102,13 +102,8 @@ build_packages() {
 }
 
 test_library_client() {
-  echo "Building distribution"
-
-  if is_truthy "$LLAMA_STACK_ONLY"; then
-    llama stack build --distro $DISTRO --image-type venv
-  else
-    llama stack build --distro $DISTRO --image-type venv
-  fi
+  echo "Installing distribution dependencies"
+  llama stack list-deps $DISTRO | xargs -L1 uv pip install
 
   echo "Running integration tests before uploading"
   run_integration_tests $DISTRO
@@ -118,13 +113,18 @@ test_docker() {
   echo "Testing docker"
 
   if is_truthy "$LLAMA_STACK_ONLY"; then
-    USE_COPY_NOT_MOUNT=true LLAMA_STACK_DIR=llama-stack \
-      llama stack build --distro $DISTRO --image-type container
+    LLAMA_STACK_CLIENT_ARG=""
   else
-    USE_COPY_NOT_MOUNT=true LLAMA_STACK_DIR=llama-stack \
-      LLAMA_STACK_CLIENT_DIR=llama-stack-client-python \
-      llama stack build --distro $DISTRO --image-type container
+    LLAMA_STACK_CLIENT_ARG="--build-arg LLAMA_STACK_CLIENT_DIR=llama-stack-client-python"
   fi
+
+  docker build . \
+    -f llama-stack/containers/Containerfile \
+    --build-arg DISTRO_NAME=$DISTRO \
+    --build-arg INSTALL_MODE=editable \
+    --build-arg LLAMA_STACK_DIR=llama-stack \
+    $LLAMA_STACK_CLIENT_ARG \
+    -t distribution-$DISTRO:dev
 
   docker images
 
