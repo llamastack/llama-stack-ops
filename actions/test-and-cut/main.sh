@@ -115,14 +115,14 @@ test_docker() {
   if is_truthy "$LLAMA_STACK_ONLY"; then
     LLAMA_STACK_CLIENT_ARG=""
   else
-    LLAMA_STACK_CLIENT_ARG="--build-arg LLAMA_STACK_CLIENT_DIR=llama-stack-client-python"
+    LLAMA_STACK_CLIENT_ARG="--build-arg LLAMA_STACK_CLIENT_DIR=/workspace/llama-stack-client-python"
   fi
 
   docker build . \
     -f llama-stack/containers/Containerfile \
     --build-arg DISTRO_NAME=$DISTRO \
     --build-arg INSTALL_MODE=editable \
-    --build-arg LLAMA_STACK_DIR=llama-stack \
+    --build-arg LLAMA_STACK_DIR=/workspace/llama-stack \
     $LLAMA_STACK_CLIENT_ARG \
     -t distribution-$DISTRO:dev
 
