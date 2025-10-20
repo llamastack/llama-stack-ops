@@ -192,8 +192,8 @@ which llama
 llama stack list-apis
 llama stack list-providers inference
 
-# just check if llama stack build works
-llama stack build --distro starter --print-deps-only --image-type venv
+# just check if llama stack list-deps works
+llama stack list-deps starter
 
 if is_truthy "$DRY_RUN"; then
   echo "DRY RUN: skipping pypi upload"
