@@ -20,6 +20,7 @@ LLAMA_STACK_ONLY=${LLAMA_STACK_ONLY:-false}
 DRY_RUN=${DRY_RUN:-false}
 
 source $(dirname $0)/../common.sh
+source $(dirname $0)/../lib/release_utils.sh
 
 npm config set '//registry.npmjs.org/:_authToken' "$NPM_TOKEN"
 
@@ -160,12 +161,27 @@ source build-env/bin/activate
 uv pip install twine
 npm install -g yarn
 
-for repo in "${REPOS[@]}"; do
+BASE_BRANCHES=()
+
+for idx in "${!REPOS[@]}"; do
+  repo="${REPOS[$idx]}"
   org=$(github_org $repo)
   git clone "https://x-access-token:${GITHUB_TOKEN}@github.com/$org/llama-$repo.git"
   cd llama-$repo
   git fetch origin refs/tags/v${RC_VERSION}:refs/tags/v${RC_VERSION}
   git checkout -b release-$RELEASE_VERSION refs/tags/v${RC_VERSION}
+  git fetch origin --prune
+
+  if ! base_branch=$(determine_base_branch); then
+    echo "Failed to determine base branch for $repo" >&2
+    exit 1
+  fi
+
+  if ! git ls-remote --heads origin "$base_branch" >/dev/null 2>&1; then
+    echo "Base branch $base_branch not found on remote for $repo" >&2
+    exit 1
+  fi
+  BASE_BRANCHES[$idx]="$base_branch"
 
   # don't run uv lock here because the dependency isn't pushed upstream so uv will fail
   add_bump_version_commit $repo $RELEASE_VERSION false
@@ -229,7 +245,8 @@ done
 deactivate
 rm -rf build-env
 
-for repo in "${REPOS[@]}"; do
+for idx in "${!REPOS[@]}"; do
+  repo="${REPOS[$idx]}"
   cd $TMPDIR
   if [ "$repo" != "stack-client-typescript" ]; then
     uv venv -p python3.12 repo-$repo-env
@@ -238,19 +255,18 @@ for repo in "${REPOS[@]}"; do
 
   cd llama-$repo
 
-  # push the new commit to main and push the tag
+  # push the release branch/tag and update the source branch
   echo "Pushing branch and tag v$RELEASE_VERSION for $repo"
   org=$(github_org $repo)
   git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/$org/llama-$repo.git" "release-$RELEASE_VERSION"
   git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/$org/llama-$repo.git" "v$RELEASE_VERSION"
 
   if ! is_truthy "$LLAMA_STACK_ONLY"; then
-    # this is fishy because the rebase is not guaranteed to work. even the conditional above is
-    # not quite correct because currently the idea is the LLAMA_STACK_ONLY=1 is set when this is a
-    # bugfix release but that's not guaranteed to be true in the future.
-    git checkout main
+    base_branch="${BASE_BRANCHES[$idx]}"
+    git fetch origin "$base_branch"
+    git checkout -B "$base_branch" "origin/$base_branch"
     add_bump_version_commit $repo $RELEASE_VERSION true
-    git push "https://x-access-token:${GITHUB_TOKEN}@github.com/$org/llama-$repo.git" "main"
+    git push "https://x-access-token:${GITHUB_TOKEN}@github.com/$org/llama-$repo.git" "$base_branch"
   fi
 
   if [ "$repo" != "stack-client-typescript" ]; then
