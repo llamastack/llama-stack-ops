@@ -4,19 +4,6 @@ inputs:
   version:
     description: 'Version of the package to test'
     required: true
-  inference_provider:
-    description: 'Inference provider to use for the release candidate (fireworks, together) (default: fireworks)'
-    required: false
-    default: 'fireworks'
-  fireworks_api_key:
-    description: 'Fireworks API key'
-    required: true
-  together_api_key:
-    description: 'Together API key'
-    required: true
-  tavily_search_api_key:
-    description: 'Tavily Search API key'
-    required: true
 
 runs:
   using: 'composite'
@@ -33,10 +20,6 @@ runs:
       shell: bash
       env:
         VERSION: ${{ inputs.version }}
-        INFERENCE_PROVIDER: ${{ inputs.inference_provider }}
-        TOGETHER_API_KEY: ${{ inputs.together_api_key }}
-        TAVILY_SEARCH_API_KEY: ${{ inputs.tavily_search_api_key }}
-        FIREWORKS_API_KEY: ${{ inputs.fireworks_api_key }}
       run: |
         chmod +x ${{ github.action_path }}/main.sh
         ${{ github.action_path }}/main.sh

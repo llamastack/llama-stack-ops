@@ -4,35 +4,18 @@ inputs:
   version:
     description: 'Version of the package to publish'
     required: true
-  commit_id:
-    description: 'Commit ID for cut'
+  commit_hash:
+    description: 'Optional: specific commit override (will be validated)'
     required: false
-    default: 'origin/main'
-  client_python_commit_id:
-    description: 'llama-stack-client-python commit ID for "cut"'
-    required: false
-    default: 'origin/main'
+    default: ''
   cut_mode:
     description: 'Mode to run the script in (test-and-cut, test-only, cut-only)'
     required: false
     default: 'test-and-cut'
-  inference_provider:
-    description: "Inference provider to use for testing"
-    required: false
-    default: 'fireworks'
   llama_stack_only:
     description: 'Only cut a llama-stack release candidate'
     required: false
     default: 'false'
-  fireworks_api_key:
-    description: 'Fireworks API key'
-    required: true
-  together_api_key:
-    description: 'Together API key'
-    required: true
-  tavily_search_api_key:
-    description: 'Tavily Search API key'
-    required: true
   github_token:
     description: 'Personal Access Token (PAT) with access to all llama repositories'
     required: true
@@ -67,17 +50,10 @@ runs:
       shell: bash
       env:
         VERSION: ${{ inputs.version }}
-        COMMIT_ID: ${{ inputs.commit_id }}
-        CLIENT_PYTHON_COMMIT_ID: ${{ inputs.client_python_commit_id }}
-        INFERENCE_PROVIDER: ${{ inputs.inference_provider }}
+        COMMIT_HASH: ${{ inputs.commit_hash }}
         CUT_MODE: ${{ inputs.cut_mode }}
         LLAMA_STACK_ONLY: ${{ inputs.llama_stack_only }}
-        TOGETHER_API_KEY: ${{ inputs.together_api_key }}
-        TAVILY_SEARCH_API_KEY: ${{ inputs.tavily_search_api_key }}
-        FIREWORKS_API_KEY: ${{ inputs.fireworks_api_key }}
         GITHUB_TOKEN: ${{ inputs.github_token }}
-        LLAMA_STACK_LOG_FILE: server.log
-        LLAMA_STACK_CLIENT_LOG_FILE: client.log
       run: |
         chmod +x ${{ github.action_path }}/main.sh
         ${{ github.action_path }}/main.sh

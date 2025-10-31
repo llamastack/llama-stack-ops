@@ -20,7 +20,6 @@ LLAMA_STACK_ONLY=${LLAMA_STACK_ONLY:-false}
 DRY_RUN=${DRY_RUN:-false}
 
 source $(dirname $0)/../common.sh
-source $(dirname $0)/../lib/release_utils.sh
 
 npm config set '//registry.npmjs.org/:_authToken' "$NPM_TOKEN"
 
@@ -33,6 +32,31 @@ is_truthy() {
   *) return 1 ;;
   esac
 }
+
+# Parse version to derive release branch name
+# Examples: 0.1.0 -> release-0.1.x, 1.2.3 -> release-1.2.x, 0.2.10.1 -> release-0.2.x
+parse_version_and_branch() {
+  local version=$1
+
+  # Validate version format (X.Y.Z or X.Y.Z.W, no rc suffix for final releases)
+  if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+    echo "ERROR: Invalid version format: $version" >&2
+    echo "Expected format: X.Y.Z[.W] (e.g., 0.1.0, 1.2.3, 0.2.10.1)" >&2
+    exit 1
+  fi
+
+  # Extract major.minor (e.g., 0.1.0 -> 0.1)
+  local major=$(echo "$version" | cut -d. -f1)
+  local minor=$(echo "$version" | cut -d. -f2)
+
+  # Derive branch name: release-{major}.{minor}.x
+  local branch_name="release-${major}.${minor}.x"
+
+  echo "$branch_name"
+}
+
+RELEASE_BRANCH=$(parse_version_and_branch "$RELEASE_VERSION")
+echo "Derived release branch: $RELEASE_BRANCH"
 
 # Yell loudly if RELEASE is already on pypi, but keep going anyway
 version_tag=$(curl -s https://pypi.org/pypi/llama-stack/json | jq -r '.info.version')
@@ -125,10 +149,14 @@ add_bump_version_commit() {
     perl -pi -e "s/^version = .*$/version = \"$version\"/" pyproject.toml
 
     if ! is_truthy "$LLAMA_STACK_ONLY"; then
-      perl -pi -e "s/llama-stack-client>=.*,/llama-stack-client>=$RELEASE_VERSION\",/" pyproject.toml
+      # Only update client dependency for non-dev versions
+      # Dev versions (e.g., 0.1.1.dev0) should keep the last stable client dependency
+      if [[ ! "$version" =~ \.dev ]]; then
+        perl -pi -e "s/llama-stack-client>=.*,/llama-stack-client>=$version\",/" pyproject.toml
 
-      if [ "$repo" == "stack" ]; then
-        perl -pi -e "s/(\"llama-stack-client\": \").+\"/\1^$RELEASE_VERSION\"/" llama_stack/ui/package.json
+        if [ "$repo" == "stack" ]; then
+          perl -pi -e "s/(\"llama-stack-client\": \").+\"/\1^$version\"/" llama_stack/ui/package.json
+        fi
       fi
 
       if [ -f "src/llama_stack_client/_version.py" ]; then
@@ -161,27 +189,13 @@ source build-env/bin/activate
 uv pip install twine
 npm install -g yarn
 
-BASE_BRANCHES=()
-
-for idx in "${!REPOS[@]}"; do
-  repo="${REPOS[$idx]}"
+for repo in "${REPOS[@]}"; do
   org=$(github_org $repo)
   git clone "https://x-access-token:${GITHUB_TOKEN}@github.com/$org/llama-$repo.git"
   cd llama-$repo
   git fetch origin refs/tags/v${RC_VERSION}:refs/tags/v${RC_VERSION}
   git checkout -b release-$RELEASE_VERSION refs/tags/v${RC_VERSION}
   git fetch origin --prune
-
-  if ! base_branch=$(determine_base_branch); then
-    echo "Failed to determine base branch for $repo" >&2
-    exit 1
-  fi
-
-  if ! git ls-remote --heads origin "$base_branch" >/dev/null 2>&1; then
-    echo "Base branch $base_branch not found on remote for $repo" >&2
-    exit 1
-  fi
-  BASE_BRANCHES[$idx]="$base_branch"
 
   # don't run uv lock here because the dependency isn't pushed upstream so uv will fail
   add_bump_version_commit $repo $RELEASE_VERSION false
@@ -245,35 +259,74 @@ done
 deactivate
 rm -rf build-env
 
-for idx in "${!REPOS[@]}"; do
-  repo="${REPOS[$idx]}"
-  cd $TMPDIR
-  if [ "$repo" != "stack-client-typescript" ]; then
-    uv venv -p python3.12 repo-$repo-env
-    source repo-$repo-env/bin/activate
-  fi
+# Push release branch and tags to remote
+for repo in "${REPOS[@]}"; do
+  cd $TMPDIR/llama-$repo
 
-  cd llama-$repo
-
-  # push the release branch/tag and update the source branch
-  echo "Pushing branch and tag v$RELEASE_VERSION for $repo"
+  echo "Pushing release branch and tag v$RELEASE_VERSION for $repo"
   org=$(github_org $repo)
-  git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/$org/llama-$repo.git" "release-$RELEASE_VERSION"
+
+  # Push the release branch with the version bump commit
+  git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/$org/llama-$repo.git" "release-$RELEASE_VERSION:$RELEASE_BRANCH"
+
+  # Push the tag
   git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/$org/llama-$repo.git" "v$RELEASE_VERSION"
 
-  if ! is_truthy "$LLAMA_STACK_ONLY"; then
-    base_branch="${BASE_BRANCHES[$idx]}"
-    git fetch origin "$base_branch"
-    git checkout -B "$base_branch" "origin/$base_branch"
-    add_bump_version_commit $repo $RELEASE_VERSION true
-    git push "https://x-access-token:${GITHUB_TOKEN}@github.com/$org/llama-$repo.git" "$base_branch"
-  fi
-
-  if [ "$repo" != "stack-client-typescript" ]; then
-    deactivate
-  fi
-
-  cd ..
+  cd $TMPDIR
 done
+
+echo "Release $RELEASE_VERSION published successfully"
+
+# Auto-bump main branch version (create PR)
+if ! is_truthy "$LLAMA_STACK_ONLY"; then
+  echo "Creating PR to bump main branch version"
+
+  # Calculate next dev version: 0.1.0 -> 0.1.1.dev0
+  MAJOR=$(echo $RELEASE_VERSION | cut -d. -f1)
+  MINOR=$(echo $RELEASE_VERSION | cut -d. -f2)
+  PATCH=$(echo $RELEASE_VERSION | cut -d. -f3)
+  NEXT_PATCH=$((PATCH + 1))
+  NEXT_DEV_VERSION="${MAJOR}.${MINOR}.${NEXT_PATCH}.dev0"
+
+  echo "Next dev version: $NEXT_DEV_VERSION"
+
+  for repo in "${REPOS[@]}"; do
+    cd $TMPDIR
+
+    if [ "$repo" != "stack-client-typescript" ]; then
+      uv venv -p python3.12 bump-main-$repo-env
+      source bump-main-$repo-env/bin/activate
+    fi
+
+    cd llama-$repo
+
+    org=$(github_org $repo)
+
+    # Checkout main branch
+    git fetch origin main
+    git checkout -B main origin/main
+
+    # Bump version to next dev version
+    add_bump_version_commit $repo $NEXT_DEV_VERSION true
+
+    # Push to a new branch for PR
+    BUMP_BRANCH="release-automation/bump-to-${NEXT_DEV_VERSION}"
+    git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/$org/llama-$repo.git" "main:${BUMP_BRANCH}"
+
+    # Create PR using gh CLI
+    GH_TOKEN=$GITHUB_TOKEN gh pr create \
+      --repo "$org/llama-$repo" \
+      --base main \
+      --head "${BUMP_BRANCH}" \
+      --title "chore: bump version to ${NEXT_DEV_VERSION}" \
+      --body "Automated version bump after releasing ${RELEASE_VERSION}" || echo "PR creation failed or PR already exists"
+
+    if [ "$repo" != "stack-client-typescript" ]; then
+      deactivate
+    fi
+
+    cd $TMPDIR
+  done
+fi
 
 echo "Done"
