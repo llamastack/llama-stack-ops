@@ -28,6 +28,29 @@ is_truthy() {
   esac
 }
 
+run_precommit_lockfile_update() {
+  # Use pre-commit to update lockfiles (uv.lock and package-lock.json)
+  # For RC builds, LLAMA_STACK_RELEASE_MODE=true with UV config pointing to test.pypi
+  echo "Attempting to update lockfiles with pre-commit..."
+  for i in {1..5}; do
+    # Set UV config to use test.pypi as extra index for RC dependencies
+    if UV_EXTRA_INDEX_URL="https://test.pypi.org/simple/" \
+       UV_INDEX_STRATEGY="unsafe-best-match" \
+       LLAMA_STACK_RELEASE_MODE=true \
+       pre-commit run --all-files; then
+      echo "pre-commit lockfile update successful."
+      break
+    else
+      if [ "$i" -eq 5 ]; then
+        echo "pre-commit lockfile update failed after 5 attempts." >&2
+        exit 1
+      fi
+      echo "pre-commit lockfile update failed, retrying in 10 seconds (attempt $i/5)..."
+      sleep 10
+    fi
+  done
+}
+
 # Parse version to derive release branch name
 parse_version_and_branch() {
   local version=$1
@@ -90,9 +113,8 @@ for repo in "${REPOS[@]}"; do
     uv pip install dist/*.whl
   fi
 
-  # tag the commit on the branch because merging it back to main could move things
-  # beyond the cut-point (main could have been updated since the cut)
-  echo "Tagging llama-$repo at version $VERSION (not pushing yet)"
+  # tag the commit on the branch (will be force-moved after lockfile updates)
+  echo "Tagging llama-$repo at version $VERSION (will update after lockfiles)"
   git tag -a "v$VERSION" -m "Release version $VERSION"
 
   if [ "$repo" == "stack-client-typescript" ]; then
@@ -108,8 +130,44 @@ for repo in "${REPOS[@]}"; do
       dist/*.whl dist/*.tar.gz
   fi
 
+  cd ..
+done
+
+# Update lockfiles now that packages are published to test.pypi
+# Force-move tags to include lockfile updates
+echo "Updating lockfiles after publishing to test.pypi..."
+for repo in "${REPOS[@]}"; do
+  if [ "$repo" == "stack-client-typescript" ]; then
+    # TypeScript client doesn't need lockfile updates
+    continue
+  fi
+
+  cd llama-$repo
+
+  # Install pre-commit if not already available
+  if ! command -v pre-commit &> /dev/null; then
+    uv pip install pre-commit
+  fi
+
+  echo "Running pre-commit to update lockfiles for $repo..."
+  run_precommit_lockfile_update
+
+  # Commit lockfile changes if any
+  if [ -n "$(git status --porcelain)" ]; then
+    git commit -am "chore: update lockfiles for ${VERSION}"
+    echo "✅ Lockfiles updated and committed for $repo"
+
+    # Force-move the tag to include the lockfile commit
+    echo "Force-moving tag v$VERSION to include lockfiles..."
+    git tag -f -a "v$VERSION" -m "Release version $VERSION"
+  else
+    echo "No lockfile changes for $repo"
+  fi
+
+  # Push tag (with force to update it)
   echo "Pushing tag for llama-$repo"
-  git push "https://x-access-token:${GITHUB_TOKEN}@github.com/$org/llama-$repo.git" "v$VERSION"
+  org=$(github_org $repo)
+  git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/$org/llama-$repo.git" "v$VERSION"
 
   cd ..
 done
