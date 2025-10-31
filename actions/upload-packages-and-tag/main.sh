@@ -32,6 +32,10 @@ run_precommit_lockfile_update() {
   # Use pre-commit to update lockfiles (uv.lock and package-lock.json)
   # For RC builds, LLAMA_STACK_RELEASE_MODE=true with UV config pointing to test.pypi
   # Note: pre-commit exits with non-zero when it modifies files, which is expected
+  if ! command -v pre-commit &> /dev/null; then
+    echo "ERROR: pre-commit is not installed" >&2
+    exit 1
+  fi
   echo "Running pre-commit to update lockfiles..."
   UV_EXTRA_INDEX_URL="https://test.pypi.org/simple/" \
     UV_INDEX_STRATEGY="unsafe-best-match" \
