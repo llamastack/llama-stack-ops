@@ -97,47 +97,29 @@ done
 
 set -x
 
-run_uv_lock() {
-  # Retry uv lock as PyPI index might be slow to update
-  echo "Attempting to lock dependencies with uv..."
+run_precommit_lockfile_update() {
+  # Use pre-commit to update lockfiles (uv.lock and package-lock.json)
+  # LLAMA_STACK_RELEASE_MODE=true signals hooks to update lockfiles
+  echo "Attempting to update lockfiles with pre-commit..."
   for i in {1..5}; do
-    if uv lock --refresh --no-cache; then
-      echo "uv lock successful."
+    if LLAMA_STACK_RELEASE_MODE=true pre-commit run --all-files; then
+      echo "pre-commit lockfile update successful."
       break
     else
       if [ "$i" -eq 5 ]; then
-        echo "uv lock failed after 5 attempts." >&2
+        echo "pre-commit lockfile update failed after 5 attempts." >&2
         exit 1
       fi
-      echo "uv lock failed, retrying in 10 seconds (attempt $i/5)..."
+      echo "pre-commit lockfile update failed, retrying in 10 seconds (attempt $i/5)..."
       sleep 10
     fi
   done
-}
-
-run_npm_install() {
-  echo "Attempting to install dependencies with npm..."
-  cd llama_stack/ui
-  for i in {1..10}; do
-    if npm install --package-lock-only --prefer-online; then
-      echo "npm install successful."
-      break
-    else
-      if [ "$i" -eq 5 ]; then
-        echo "npm install failed after 5 attempts." >&2
-        exit 1
-      fi
-      echo "npm install failed, retrying in 10 seconds (attempt $i/5)..."
-      sleep 10
-    fi
-  done
-  cd ../../
 }
 
 add_bump_version_commit() {
   local repo=$1
   local version=$2
-  local should_run_uv_lock=$3
+  local should_update_lockfiles=$3
 
   if [ "$repo" == "stack-client-typescript" ]; then
     perl -pi -e "s/\"version\": \".*\"/\"version\": \"$version\"/" package.json
@@ -164,12 +146,8 @@ add_bump_version_commit() {
       fi
     fi
 
-    if is_truthy "$should_run_uv_lock"; then
-      run_uv_lock
-
-      if [ "$repo" == "stack" ]; then
-        run_npm_install
-      fi
+    if is_truthy "$should_update_lockfiles"; then
+      run_precommit_lockfile_update
     fi
   fi
 
@@ -258,6 +236,47 @@ done
 
 deactivate
 rm -rf build-env
+
+# Update lockfiles now that packages are published to PyPI/npm
+# We'll force-move the tag after this to include lockfiles in the release
+echo "Updating lockfiles after publishing packages..."
+for repo in "${REPOS[@]}"; do
+  if [ "$repo" == "stack-client-typescript" ]; then
+    # TypeScript client doesn't need lockfile updates in this step
+    continue
+  fi
+
+  cd $TMPDIR/llama-$repo
+
+  # Set up a temporary venv to ensure we have uv and pre-commit
+  uv venv lockfile-update-env
+  source lockfile-update-env/bin/activate
+
+  # Install pre-commit if not already available
+  if ! command -v pre-commit &> /dev/null; then
+    uv pip install pre-commit
+  fi
+
+  echo "Running pre-commit to update lockfiles for $repo..."
+  run_precommit_lockfile_update
+
+  # Commit lockfile changes if any
+  if [ -n "$(git status --porcelain)" ]; then
+    git commit -am "chore: update lockfiles for ${RELEASE_VERSION}"
+    echo "✅ Lockfiles updated and committed for $repo"
+
+    # Force-move the tag to include the lockfile commit
+    echo "Force-moving tag v$RELEASE_VERSION to include lockfiles..."
+    git tag -f -a "v$RELEASE_VERSION" -m "Release version $RELEASE_VERSION"
+  else
+    echo "No lockfile changes for $repo"
+  fi
+
+  deactivate
+  rm -rf lockfile-update-env
+
+  cd $TMPDIR
+done
 
 # Push release branch and tags to remote
 for repo in "${REPOS[@]}"; do
