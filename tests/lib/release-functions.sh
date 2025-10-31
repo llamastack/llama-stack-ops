@@ -34,10 +34,5 @@ parse_version_and_branch() {
 }
 
 github_org() {
-  local repo=$1
-  if [ "$repo" == "stack" ]; then
-    echo "meta-llama"
-  else
-    echo "llamastack"
-  fi
+  echo "llamastack"
 }

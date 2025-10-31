@@ -79,12 +79,7 @@ EOF
 
 # Mock github_org function
 github_org() {
-  local repo=$1
-  if [ "$repo" = "stack" ]; then
-    echo "meta-llama"
-  else
-    echo "llamastack"
-  fi
+  echo "llamastack"
 }
 export -f github_org
 
