@@ -43,8 +43,31 @@ jobs:
       id: version
       run: |
         if [ -z "${{ steps.inputs.outputs.version }}" ]; then
-          echo "value=0.0.0.dev$(date +%Y%m%d%H%M%S)" >> $GITHUB_OUTPUT
+          # For nightly builds, read the version from main's pyproject.toml
+          # and generate a timestamped dev version
+          git clone --depth 1 --branch main https://github.com/llamastack/llama-stack.git /tmp/llama-stack
+          VERSION=$(grep '^version = ' /tmp/llama-stack/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+
+          # If version ends with .dev0, strip it; otherwise increment patch version
+          if [[ "$VERSION" =~ \.dev0$ ]]; then
+            BASE_VERSION="${VERSION%.dev0}"
+          else
+            if [[ "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              MAJOR="${BASH_REMATCH[1]}"
+              MINOR="${BASH_REMATCH[2]}"
+              PATCH="${BASH_REMATCH[3]}"
+              NEXT_PATCH=$((PATCH + 1))
+              BASE_VERSION="${MAJOR}.${MINOR}.${NEXT_PATCH}"
+            else
+              echo "ERROR: Invalid version format: $VERSION"
+              exit 1
+            fi
+          fi
+
+          DEV_VERSION="${BASE_VERSION}.dev$(date +%Y%m%d)"
+          echo "value=${DEV_VERSION}" >> $GITHUB_OUTPUT
           echo "cut_mode=test-and-cut" >> $GITHUB_OUTPUT
+          echo "Generated nightly dev version: ${DEV_VERSION} (from ${VERSION})"
         else
           echo "value=${{ steps.inputs.outputs.version }}" >> $GITHUB_OUTPUT
           echo "cut_mode=${{ steps.inputs.outputs.cut_mode }}" >> $GITHUB_OUTPUT

@@ -58,6 +58,29 @@ fi
 
 echo ""
 
+# Test dev version detection
+log_test "Dev version detection"
+
+if is_dev_version "0.0.0.dev20251031001530"; then
+  log_pass "Detected dev version"
+else
+  log_fail "Failed to detect dev version"
+fi
+
+if is_dev_version "0.1.0rc1"; then
+  log_fail "Should not detect rc as dev"
+else
+  log_pass "RC not detected as dev"
+fi
+
+if is_dev_version "1.2.3"; then
+  log_fail "Should not detect release as dev"
+else
+  log_pass "Release not detected as dev"
+fi
+
+echo ""
+
 # Test git operations with synthetic repos
 log_test "Git branch operations"
 
