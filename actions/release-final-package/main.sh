@@ -305,6 +305,7 @@ if ! is_truthy "$LLAMA_STACK_ONLY"; then
     if [ "$repo" != "stack-client-typescript" ]; then
       uv venv -p python3.12 bump-main-$repo-env
       source bump-main-$repo-env/bin/activate
+      uv pip install pre-commit
     fi
 
     cd llama-$repo
