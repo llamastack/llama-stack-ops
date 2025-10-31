@@ -287,8 +287,9 @@ done
 echo "Release $RELEASE_VERSION published successfully"
 
 # Auto-bump main branch version (create PR)
+# Only bump the stack repo, not client libraries
 if ! is_truthy "$LLAMA_STACK_ONLY"; then
-  echo "Creating PR to bump main branch version"
+  echo "Creating PR to bump main branch version for stack repo"
 
   # Calculate next dev version: 0.1.0 -> 0.1.1.dev0
   MAJOR=$(echo $RELEASE_VERSION | cut -d. -f1)
@@ -299,12 +300,13 @@ if ! is_truthy "$LLAMA_STACK_ONLY"; then
 
   echo "Next dev version: $NEXT_DEV_VERSION"
 
-  for repo in "${REPOS[@]}"; do
+  for repo in "stack"; do
     cd $TMPDIR
 
     if [ "$repo" != "stack-client-typescript" ]; then
       uv venv -p python3.12 bump-main-$repo-env
       source bump-main-$repo-env/bin/activate
+      uv pip install pre-commit
     fi
 
     cd llama-$repo
