@@ -31,24 +31,13 @@ is_truthy() {
 run_precommit_lockfile_update() {
   # Use pre-commit to update lockfiles (uv.lock and package-lock.json)
   # For RC builds, LLAMA_STACK_RELEASE_MODE=true with UV config pointing to test.pypi
-  echo "Attempting to update lockfiles with pre-commit..."
-  for i in {1..5}; do
-    # Set UV config to use test.pypi as extra index for RC dependencies
-    if UV_EXTRA_INDEX_URL="https://test.pypi.org/simple/" \
-       UV_INDEX_STRATEGY="unsafe-best-match" \
-       LLAMA_STACK_RELEASE_MODE=true \
-       pre-commit run --all-files; then
-      echo "pre-commit lockfile update successful."
-      break
-    else
-      if [ "$i" -eq 5 ]; then
-        echo "pre-commit lockfile update failed after 5 attempts." >&2
-        exit 1
-      fi
-      echo "pre-commit lockfile update failed, retrying in 10 seconds (attempt $i/5)..."
-      sleep 10
-    fi
-  done
+  # Note: pre-commit exits with non-zero when it modifies files, which is expected
+  echo "Running pre-commit to update lockfiles..."
+  UV_EXTRA_INDEX_URL="https://test.pypi.org/simple/" \
+    UV_INDEX_STRATEGY="unsafe-best-match" \
+    LLAMA_STACK_RELEASE_MODE=true \
+    pre-commit run --all-files || true
+  echo "pre-commit run completed."
 }
 
 # Parse version to derive release branch name
@@ -164,9 +153,11 @@ for repo in "${REPOS[@]}"; do
     echo "No lockfile changes for $repo"
   fi
 
-  # Push tag (with force to update it)
-  echo "Pushing tag for llama-$repo"
+  # Push branch first (to ensure the commit exists on remote)
+  # Then push tag (which points to the commit)
+  echo "Pushing branch and tag for llama-$repo"
   org=$(github_org $repo)
+  git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/$org/llama-$repo.git" "$RELEASE_BRANCH"
   git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/$org/llama-$repo.git" "v$VERSION"
 
   cd ..

@@ -100,20 +100,10 @@ set -x
 run_precommit_lockfile_update() {
   # Use pre-commit to update lockfiles (uv.lock and package-lock.json)
   # LLAMA_STACK_RELEASE_MODE=true signals hooks to update lockfiles
-  echo "Attempting to update lockfiles with pre-commit..."
-  for i in {1..5}; do
-    if LLAMA_STACK_RELEASE_MODE=true pre-commit run --all-files; then
-      echo "pre-commit lockfile update successful."
-      break
-    else
-      if [ "$i" -eq 5 ]; then
-        echo "pre-commit lockfile update failed after 5 attempts." >&2
-        exit 1
-      fi
-      echo "pre-commit lockfile update failed, retrying in 10 seconds (attempt $i/5)..."
-      sleep 10
-    fi
-  done
+  # Note: pre-commit exits with non-zero when it modifies files, which is expected
+  echo "Running pre-commit to update lockfiles..."
+  LLAMA_STACK_RELEASE_MODE=true pre-commit run --all-files || true
+  echo "pre-commit run completed."
 }
 
 add_bump_version_commit() {
