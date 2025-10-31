@@ -1,10 +1,5 @@
 github_org() {
-  repo=$1
-  if [ "$repo" == "stack" ]; then
-    echo "meta-llama"
-  else
-    echo "llamastack"
-  fi
+  echo "llamastack"
 }
 
 run_integration_tests() {

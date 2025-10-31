@@ -3,16 +3,12 @@ name: Test and Possibly Cut a Branch
 on:
   workflow_dispatch:
     inputs:
-      commit_id:
-        description: 'llama-stack commit ID'
-        required: true
-      client_python_commit_id:
-        description: 'llama-stack-client-python commit ID'
+      commit_hash:
+        description: 'Optional: specific commit hash to test'
         required: false
         type: string
-        default: 'origin/main'
       version:
-        description: 'Version (e.g. 0.1.1rc2); if optional, will not cut a branch'
+        description: 'Version (e.g. 0.1.1rc2); if empty, will use dev version'
         required: false
         type: string
       cut_mode:
@@ -20,11 +16,6 @@ on:
         required: false
         type: string
         default: 'test-and-cut'
-      inference_provider:
-        description: 'Inference provider to use for testing'
-        required: false
-        type: string
-        default: 'fireworks'
   schedule:
     - cron: "0 0 * * *"  # Run every day at midnight
 
@@ -37,17 +28,15 @@ jobs:
       contents: read
     steps:
     - uses: actions/checkout@v4
-    - name: Set commit ID and version for scheduled runs
+    - name: Set inputs for scheduled runs
       id: inputs
       run: |
         if [[ "${{ github.event_name }}" == "schedule" ]]; then
-          echo "commit_id=origin/main" >> $GITHUB_OUTPUT
+          echo "commit_hash=" >> $GITHUB_OUTPUT
           echo "version=" >> $GITHUB_OUTPUT
-          echo "client_python_commit_id=origin/main" >> $GITHUB_OUTPUT
         else
-          echo "commit_id=${{ inputs.commit_id }}" >> $GITHUB_OUTPUT
+          echo "commit_hash=${{ inputs.commit_hash }}" >> $GITHUB_OUTPUT
           echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
-          echo "client_python_commit_id=${{ inputs.client_python_commit_id }}" >> $GITHUB_OUTPUT
         fi
       shell: bash
     - name: Set version if not provided
@@ -64,13 +53,8 @@ jobs:
     - uses: ./actions/test-and-cut
       with:
         version: ${{ steps.version.outputs.value }}
-        commit_id: ${{ steps.inputs.outputs.commit_id }}
-        client_python_commit_id: ${{ steps.inputs.outputs.client_python_commit_id }}
-        inference_provider: ${{ inputs.inference_provider }}
+        commit_hash: ${{ steps.inputs.outputs.commit_hash }}
         cut_mode: ${{ steps.version.outputs.cut_mode }}
-        fireworks_api_key: ${{ secrets.FIREWORKS_API_KEY }}
-        together_api_key: ${{ secrets.TOGETHER_API_KEY }}
-        tavily_search_api_key: ${{ secrets.TAVILY_SEARCH_API_KEY }}
         # TODO: this will expire in 90 days; we should figure out a
         # GitHub App setup that can be used instead
         github_token: ${{ secrets.LLAMA_REPOS_PAT }}

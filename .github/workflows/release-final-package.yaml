@@ -45,9 +45,6 @@ jobs:
     - uses: ./actions/test-published-package
       with:
         version: ${{ inputs.release_version }}
-        together_api_key: ${{ secrets.TOGETHER_API_KEY }}
-        tavily_search_api_key: ${{ secrets.TAVILY_SEARCH_API_KEY }}
-        fireworks_api_key: ${{ secrets.FIREWORKS_API_KEY }}
 
   publish-docker-images:
     needs:

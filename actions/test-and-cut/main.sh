@@ -4,19 +4,11 @@ if [ -z "$VERSION" ]; then
   echo "You must set the VERSION environment variable" >&2
   exit 1
 fi
-if [ -z "${COMMIT_ID+x}" ]; then
-  echo "You must set the COMMIT_ID environment variable" >&2
-  exit 1
-fi
-
-if [ -z "${CLIENT_PYTHON_COMMIT_ID+x}" ]; then
-  echo "You must set the CLIENT_PYTHON_COMMIT_ID environment variable" >&2
-  exit 1
-fi
 
 GITHUB_TOKEN=${GITHUB_TOKEN:-}
 CUT_MODE=${CUT_MODE:-test-and-cut}
 LLAMA_STACK_ONLY=${LLAMA_STACK_ONLY:-false}
+COMMIT_HASH=${COMMIT_HASH:-}
 
 source $(dirname $0)/../common.sh
 
@@ -36,6 +28,38 @@ is_truthy() {
   esac
 }
 
+# Parse version to extract base version and derive release branch name
+# Examples:
+#   0.1.0rc1 -> base=0.1.0, branch=release-0.1.x
+#   0.1.1rc2 -> base=0.1.1, branch=release-0.1.x
+#   1.2.3 -> base=1.2.3, branch=release-1.2.x
+#   0.2.10.1rc1 -> base=0.2.10.1, branch=release-0.2.x
+parse_version_and_branch() {
+  local version=$1
+
+  # Validate version format (basic check for X.Y.Z or X.Y.Z.W pattern)
+  if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?(rc[0-9]+)?$ ]]; then
+    echo "ERROR: Invalid version format: $version" >&2
+    echo "Expected format: X.Y.Z[.W][rcN] (e.g., 0.1.0rc1, 1.2.3, 0.2.10.1)" >&2
+    exit 1
+  fi
+
+  # Remove rc suffix if present (e.g., 0.1.0rc1 -> 0.1.0)
+  local base_version=$(echo "$version" | sed 's/rc[0-9]*$//')
+
+  # Extract major.minor (e.g., 0.1.0 -> 0.1)
+  local major=$(echo "$base_version" | cut -d. -f1)
+  local minor=$(echo "$base_version" | cut -d. -f2)
+
+  # Derive branch name: release-{major}.{minor}.x
+  local branch_name="release-${major}.${minor}.x"
+
+  echo "$branch_name"
+}
+
+RELEASE_BRANCH=$(parse_version_and_branch "$VERSION")
+echo "Derived release branch: $RELEASE_BRANCH"
+
 DISTRO=starter
 
 TMPDIR=$(mktemp -d)
@@ -43,6 +67,63 @@ cd $TMPDIR
 
 uv venv --python 3.12
 source .venv/bin/activate
+
+determine_source_commit_for_repo() {
+  local repo=$1
+  local org=$(github_org $repo)
+
+  # Check if release branch exists for this repo
+  if git ls-remote --heads "https://github.com/$org/llama-$repo.git" "$RELEASE_BRANCH" | grep -q .; then
+    echo "Release branch $RELEASE_BRANCH exists for $repo" >&2
+
+    if [ -n "$COMMIT_HASH" ]; then
+      # COMMIT_HASH override provided - validate it
+      echo "Validating commit override: $COMMIT_HASH" >&2
+
+      # Fetch both the commit and the branch
+      git fetch origin "$COMMIT_HASH" || {
+        echo "ERROR: Commit $COMMIT_HASH does not exist in $repo" >&2
+        exit 1
+      }
+
+      git fetch origin "$RELEASE_BRANCH"
+
+      # Check if commit is related to the branch (ancestor or descendant)
+      if ! git merge-base --is-ancestor "$COMMIT_HASH" "origin/$RELEASE_BRANCH" && \
+         ! git merge-base --is-ancestor "origin/$RELEASE_BRANCH" "$COMMIT_HASH"; then
+        echo "ERROR: Commit $COMMIT_HASH is not related to branch $RELEASE_BRANCH" >&2
+        echo "ERROR: The commit must be an ancestor or descendant of the release branch" >&2
+        exit 1
+      fi
+
+      echo "Using commit override: $COMMIT_HASH" >&2
+      echo "$COMMIT_HASH"
+    else
+      # Use HEAD of release branch
+      echo "Using HEAD of existing release branch" >&2
+      echo "origin/$RELEASE_BRANCH"
+    fi
+  else
+    echo "Release branch $RELEASE_BRANCH does not exist for $repo - will create it" >&2
+
+    if [ -n "$COMMIT_HASH" ]; then
+      # Creating new branch from commit override
+      echo "Creating new release branch from commit: $COMMIT_HASH" >&2
+
+      # Validate commit exists
+      git fetch origin "$COMMIT_HASH" || {
+        echo "ERROR: Commit $COMMIT_HASH does not exist in $repo" >&2
+        exit 1
+      }
+
+      echo "$COMMIT_HASH"
+    else
+      # Creating new branch from main
+      echo "Creating new release branch from origin/main" >&2
+      echo "origin/main"
+    fi
+  fi
+}
 
 build_packages() {
   npm install -g yarn
@@ -54,21 +135,28 @@ build_packages() {
 
   for repo in "${REPOS[@]}"; do
     org=$(github_org $repo)
-    git clone --depth 10 "https://x-access-token:${GITHUB_TOKEN}@github.com/$org/llama-$repo.git"
+    git clone "https://x-access-token:${GITHUB_TOKEN}@github.com/$org/llama-$repo.git"
     cd llama-$repo
 
-    if [ "$repo" == "stack" ] && [ -n "$COMMIT_ID" ]; then
-      REF="${COMMIT_ID#origin/}"
+    # Determine which commit to use as the base
+    SOURCE_COMMIT=$(determine_source_commit_for_repo "$repo")
+
+    # Checkout/create the release branch
+    if [[ "$SOURCE_COMMIT" == origin/* ]]; then
+      # It's a remote ref (either origin/release-X.Y.x or origin/main)
+      REF="${SOURCE_COMMIT#origin/}"
       git fetch origin "$REF"
 
-      # Use FETCH_HEAD which is where the fetched commit is stored
-      git checkout -b "rc-$VERSION" FETCH_HEAD
-    elif [ "$repo" == "stack-client-python" ] && [ -n "$CLIENT_PYTHON_COMMIT_ID" ]; then
-      REF="${CLIENT_PYTHON_COMMIT_ID#origin/}"
-      git fetch origin "$REF"
-      git checkout -b "rc-$VERSION" FETCH_HEAD
+      if [ "$REF" == "$RELEASE_BRANCH" ]; then
+        # Branch already exists, check it out
+        git checkout -b "$RELEASE_BRANCH" FETCH_HEAD
+      else
+        # Creating new release branch from main or other ref
+        git checkout -b "$RELEASE_BRANCH" FETCH_HEAD
+      fi
     else
-      git checkout -b "rc-$VERSION"
+      # It's a commit hash, create release branch from it
+      git checkout -b "$RELEASE_BRANCH" "$SOURCE_COMMIT"
     fi
 
     # TODO: this is dangerous use uvx toml-cli toml set project.version $VERSION instead of this
@@ -136,9 +224,6 @@ test_docker() {
     -e SAFETY_MODEL=ollama/llama-guard3:1b \
     -e LLAMA_STACK_TEST_INFERENCE_MODE=replay \
     -e LLAMA_STACK_TEST_STACK_CONFIG_TYPE=server \
-    -e TOGETHER_API_KEY=$TOGETHER_API_KEY \
-    -e FIREWORKS_API_KEY=$FIREWORKS_API_KEY \
-    -e TAVILY_SEARCH_API_KEY=$TAVILY_SEARCH_API_KEY \
     -v $(pwd)/llama-stack:/app/llama-stack-source \
     distribution-$DISTRO:dev \
     --port $LLAMA_STACK_PORT
@@ -179,12 +264,11 @@ if [ "$CUT_MODE" == "test-only" ]; then
 fi
 
 for repo in "${REPOS[@]}"; do
-  echo "Pushing branch rc-$VERSION for llama-$repo"
+  echo "Pushing release branch $RELEASE_BRANCH for llama-$repo"
   cd llama-$repo
   org=$(github_org $repo)
-  git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/$org/llama-$repo.git" "rc-$VERSION"
+  git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/$org/llama-$repo.git" "$RELEASE_BRANCH"
   cd ..
-
 done
 
-echo "Successfully cut a release candidate branch $VERSION"
+echo "Successfully cut release candidate $VERSION on branch $RELEASE_BRANCH"

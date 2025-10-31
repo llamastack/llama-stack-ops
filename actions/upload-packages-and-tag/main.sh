@@ -28,6 +28,30 @@ is_truthy() {
   esac
 }
 
+# Parse version to derive release branch name
+parse_version_and_branch() {
+  local version=$1
+
+  # Validate version format
+  if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?(rc[0-9]+)?$ ]]; then
+    echo "ERROR: Invalid version format: $version" >&2
+    exit 1
+  fi
+
+  # Remove rc suffix if present
+  local base_version=$(echo "$version" | sed 's/rc[0-9]*$//')
+
+  # Extract major.minor
+  local major=$(echo "$base_version" | cut -d. -f1)
+  local minor=$(echo "$base_version" | cut -d. -f2)
+
+  # Derive branch name
+  echo "release-${major}.${minor}.x"
+}
+
+RELEASE_BRANCH=$(parse_version_and_branch "$VERSION")
+echo "Derived release branch: $RELEASE_BRANCH"
+
 TMPDIR=$(mktemp -d)
 cd $TMPDIR
 
@@ -45,12 +69,12 @@ fi
 
 for repo in "${REPOS[@]}"; do
   org=$(github_org $repo)
-  git clone --depth 10 "https://x-access-token:${GITHUB_TOKEN}@github.com/$org/llama-$repo.git"
+  git clone "https://x-access-token:${GITHUB_TOKEN}@github.com/$org/llama-$repo.git"
   cd llama-$repo
 
-  echo "Building package..."
-  git fetch origin "rc-$VERSION":"rc-$VERSION"
-  git checkout "rc-$VERSION"
+  echo "Fetching release branch $RELEASE_BRANCH..."
+  git fetch origin "$RELEASE_BRANCH":"$RELEASE_BRANCH"
+  git checkout "$RELEASE_BRANCH"
 
   if [ "$repo" == "stack-client-typescript" ]; then
     NPM_VERSION=$(cat package.json | jq -r '.version')

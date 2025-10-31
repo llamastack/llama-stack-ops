@@ -7,15 +7,10 @@ on:
         description: 'Version (e.g. 0.2.21-dev.20250911)'
         required: false
         type: string
-      commit_id:
-        description: 'Commit ID for "cut" (default: origin/main)'
+      commit_hash:
+        description: 'Optional: specific commit hash to use'
         required: false
         type: string
-      inference_provider:
-        description: 'Inference provider (fireworks, together)'
-        required: false
-        type: string
-        default: 'fireworks'
       cut_mode:
         description: 'Mode to run the script in (test-and-cut, cut-only)'
         type: string
@@ -75,13 +70,9 @@ jobs:
     - uses: ./actions/test-and-cut
       with:
         version: ${{ needs.generate-version.outputs.version }}
-        commit_id: ${{ inputs.commit_id }}
-        inference_provider: ${{ inputs.inference_provider }}
+        commit_hash: ${{ inputs.commit_hash }}
         cut_mode: ${{ inputs.cut_mode }}
         llama_stack_only: ${{ inputs.llama_stack_only }}
-        fireworks_api_key: ${{ secrets.FIREWORKS_API_KEY }}
-        together_api_key: ${{ secrets.TOGETHER_API_KEY }}
-        tavily_search_api_key: ${{ secrets.TAVILY_SEARCH_API_KEY }}
         # TODO: this will expire in 90 days; we should figure out a
         # GitHub App setup that can be used instead
         github_token: ${{ secrets.LLAMA_REPOS_PAT }}
@@ -117,7 +108,3 @@ jobs:
     - uses: ./actions/test-published-package
       with:
         version: ${{ needs.generate-version.outputs.version }}
-        inference_provider: ${{ inputs.inference_provider }}
-        together_api_key: ${{ secrets.TOGETHER_API_KEY }}
-        tavily_search_api_key: ${{ secrets.TAVILY_SEARCH_API_KEY }}
-        fireworks_api_key: ${{ secrets.FIREWORKS_API_KEY }}
