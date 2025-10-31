@@ -28,37 +28,47 @@ is_truthy() {
   esac
 }
 
-# Parse version to extract base version and derive release branch name
-# Examples:
-#   0.1.0rc1 -> base=0.1.0, branch=release-0.1.x
-#   0.1.1rc2 -> base=0.1.1, branch=release-0.1.x
-#   1.2.3 -> base=1.2.3, branch=release-1.2.x
-#   0.2.10.1rc1 -> base=0.2.10.1, branch=release-0.2.x
-parse_version_and_branch() {
-  local version=$1
+# Detect if this is a dev version (e.g., 0.0.0.dev20251031001530)
+# Dev versions are built from main and don't use release branches
+if [[ "$VERSION" =~ \.dev[0-9]+$ ]]; then
+  IS_DEV_BUILD=true
+  RELEASE_BRANCH=""
+  echo "Detected dev version: $VERSION (will build from main, no release branch)"
+else
+  IS_DEV_BUILD=false
 
-  # Validate version format (basic check for X.Y.Z or X.Y.Z.W pattern)
-  if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?(rc[0-9]+)?$ ]]; then
-    echo "ERROR: Invalid version format: $version" >&2
-    echo "Expected format: X.Y.Z[.W][rcN] (e.g., 0.1.0rc1, 1.2.3, 0.2.10.1)" >&2
-    exit 1
-  fi
+  # Parse version to extract base version and derive release branch name
+  # Examples:
+  #   0.1.0rc1 -> base=0.1.0, branch=release-0.1.x
+  #   0.1.1rc2 -> base=0.1.1, branch=release-0.1.x
+  #   1.2.3 -> base=1.2.3, branch=release-1.2.x
+  #   0.2.10.1rc1 -> base=0.2.10.1, branch=release-0.2.x
+  parse_version_and_branch() {
+    local version=$1
 
-  # Remove rc suffix if present (e.g., 0.1.0rc1 -> 0.1.0)
-  local base_version=$(echo "$version" | sed 's/rc[0-9]*$//')
+    # Validate version format (basic check for X.Y.Z or X.Y.Z.W pattern)
+    if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?(rc[0-9]+)?$ ]]; then
+      echo "ERROR: Invalid version format: $version" >&2
+      echo "Expected format: X.Y.Z[.W][rcN] (e.g., 0.1.0rc1, 1.2.3, 0.2.10.1)" >&2
+      exit 1
+    fi
 
-  # Extract major.minor (e.g., 0.1.0 -> 0.1)
-  local major=$(echo "$base_version" | cut -d. -f1)
-  local minor=$(echo "$base_version" | cut -d. -f2)
+    # Remove rc suffix if present (e.g., 0.1.0rc1 -> 0.1.0)
+    local base_version=$(echo "$version" | sed 's/rc[0-9]*$//')
 
-  # Derive branch name: release-{major}.{minor}.x
-  local branch_name="release-${major}.${minor}.x"
+    # Extract major.minor (e.g., 0.1.0 -> 0.1)
+    local major=$(echo "$base_version" | cut -d. -f1)
+    local minor=$(echo "$base_version" | cut -d. -f2)
 
-  echo "$branch_name"
-}
+    # Derive branch name: release-{major}.{minor}.x
+    local branch_name="release-${major}.${minor}.x"
 
-RELEASE_BRANCH=$(parse_version_and_branch "$VERSION")
-echo "Derived release branch: $RELEASE_BRANCH"
+    echo "$branch_name"
+  }
+
+  RELEASE_BRANCH=$(parse_version_and_branch "$VERSION")
+  echo "Derived release branch: $RELEASE_BRANCH"
+fi
 
 DISTRO=starter
 
@@ -138,25 +148,31 @@ build_packages() {
     git clone "https://x-access-token:${GITHUB_TOKEN}@github.com/$org/llama-$repo.git"
     cd llama-$repo
 
-    # Determine which commit to use as the base
-    SOURCE_COMMIT=$(determine_source_commit_for_repo "$repo")
-
-    # Checkout/create the release branch
-    if [[ "$SOURCE_COMMIT" == origin/* ]]; then
-      # It's a remote ref (either origin/release-X.Y.x or origin/main)
-      REF="${SOURCE_COMMIT#origin/}"
-      git fetch origin "$REF"
-
-      if [ "$REF" == "$RELEASE_BRANCH" ]; then
-        # Branch already exists, check it out
-        git checkout -b "$RELEASE_BRANCH" FETCH_HEAD
-      else
-        # Creating new release branch from main or other ref
-        git checkout -b "$RELEASE_BRANCH" FETCH_HEAD
-      fi
+    if [ "$IS_DEV_BUILD" = "true" ]; then
+      # For dev builds, always build from main
+      git fetch origin main
+      git checkout -b "dev-build-$VERSION" origin/main
     else
-      # It's a commit hash, create release branch from it
-      git checkout -b "$RELEASE_BRANCH" "$SOURCE_COMMIT"
+      # Determine which commit to use as the base for release builds
+      SOURCE_COMMIT=$(determine_source_commit_for_repo "$repo")
+
+      # Checkout/create the release branch
+      if [[ "$SOURCE_COMMIT" == origin/* ]]; then
+        # It's a remote ref (either origin/release-X.Y.x or origin/main)
+        REF="${SOURCE_COMMIT#origin/}"
+        git fetch origin "$REF"
+
+        if [ "$REF" == "$RELEASE_BRANCH" ]; then
+          # Branch already exists, check it out
+          git checkout -b "$RELEASE_BRANCH" FETCH_HEAD
+        else
+          # Creating new release branch from main or other ref
+          git checkout -b "$RELEASE_BRANCH" FETCH_HEAD
+        fi
+      else
+        # It's a commit hash, create release branch from it
+        git checkout -b "$RELEASE_BRANCH" "$SOURCE_COMMIT"
+      fi
     fi
 
     # TODO: this is dangerous use uvx toml-cli toml set project.version $VERSION instead of this
@@ -184,7 +200,11 @@ build_packages() {
       uv pip install dist/*.whl
     fi
 
-    git commit -am "Release candidate $VERSION"
+    if [ "$IS_DEV_BUILD" = "true" ]; then
+      git commit -am "Dev build $VERSION"
+    else
+      git commit -am "Release candidate $VERSION"
+    fi
     cd ..
   done
 }
@@ -260,6 +280,14 @@ fi
 # if MODE is test-only, don't cut the branch
 if [ "$CUT_MODE" == "test-only" ]; then
   echo "Not cutting (i.e., pushing the branch) because MODE is test-only"
+  exit 0
+fi
+
+# Dev builds don't push branches (they build from main)
+if [ "$IS_DEV_BUILD" = "true" ]; then
+  echo "Dev build $VERSION completed successfully"
+  echo "Built from main branch, packages published to test.pypi"
+  echo "No branches pushed (dev builds are ephemeral)"
   exit 0
 fi
 

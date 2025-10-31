@@ -36,3 +36,12 @@ parse_version_and_branch() {
 github_org() {
   echo "llamastack"
 }
+
+is_dev_version() {
+  local version=$1
+  if [[ "$version" =~ \.dev[0-9]+$ ]]; then
+    return 0
+  else
+    return 1
+  fi
+}
