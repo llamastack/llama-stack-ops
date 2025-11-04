@@ -127,13 +127,13 @@ add_bump_version_commit() {
         perl -pi -e "s/llama-stack-client>=.*,/llama-stack-client>=$version\",/" pyproject.toml
 
         if [ "$repo" == "stack" ]; then
-          # Handle both old (llama_stack/ui) and new (src/llama_stack/ui) paths
-          if [ -f "src/llama_stack/ui/package.json" ]; then
-            UI_PATH="src/llama_stack/ui"
+          # Handle both old (llama_stack/ui) and new (src/llama_stack_ui) paths
+          if [ -f "src/llama_stack_ui/package.json" ]; then
+            UI_PATH="src/llama_stack_ui"
           elif [ -f "llama_stack/ui/package.json" ]; then
             UI_PATH="llama_stack/ui"
           else
-            echo "ERROR: Could not find llama_stack/ui/package.json" >&2
+            echo "ERROR: Could not find llama_stack_ui/package.json" >&2
             exit 1
           fi
 
