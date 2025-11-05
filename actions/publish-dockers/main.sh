@@ -5,8 +5,17 @@ if [ -z "$VERSION" ]; then
   exit 1
 fi
 DISTROS=${DISTROS:-}
+INCLUDE_UI_IMAGE=${INCLUDE_UI_IMAGE:-true}
 
 set -euo pipefail
+
+is_truthy() {
+  case "$1" in
+  true | 1 | yes | on) return 0 ;;
+  false | 0 | no | off) return 1 ;;
+  *) return 1 ;;
+  esac
+}
 
 release_exists() {
   local source=$1
@@ -110,6 +119,65 @@ EOF
   fi
 }
 
+build_and_push_ui_docker_image() {
+  local version=$1
+
+  if ! command -v docker &>/dev/null; then
+    echo "docker CLI is required to publish llamastack/ui" >&2
+    exit 1
+  fi
+
+  local tag_suffix
+  if [ "$PYPI_SOURCE" = "testpypi" ]; then
+    tag_suffix="test-${version}"
+  else
+    tag_suffix="${version}"
+  fi
+
+  (
+    set -euo pipefail
+    local tmp_dir
+    tmp_dir=$(mktemp -d)
+    trap 'rm -rf "$tmp_dir"' EXIT
+
+    cat > "$tmp_dir/Containerfile" <<'EOF'
+ARG UI_VERSION
+FROM node:22.5.1-alpine
+
+ENV NODE_ENV=production
+
+# Install dumb-init for proper signal handling
+RUN apk add --no-cache dumb-init
+
+# Create non-root user for security
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+# Install the UI package from npm
+RUN npm install -g "llama-stack-ui@${UI_VERSION}"
+
+USER nextjs
+
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["llama-stack-ui"]
+EOF
+
+    docker build \
+      --build-arg UI_VERSION="$version" \
+      -t "llamastack/ui:${tag_suffix}" \
+      -f "$tmp_dir/Containerfile" \
+      "$tmp_dir"
+  )
+
+  if [ "$PYPI_SOURCE" = "testpypi" ]; then
+    docker push "llamastack/ui:${tag_suffix}"
+  else
+    docker tag "llamastack/ui:${tag_suffix}" "llamastack/ui:latest"
+    docker push "llamastack/ui:${tag_suffix}"
+    docker push "llamastack/ui:latest"
+  fi
+}
+
 if [ -z "$DISTROS" ]; then
   DISTROS=(starter meta-reference-gpu postgres-demo dell starter-gpu)
 else
@@ -119,5 +187,11 @@ fi
 for distro in "${DISTROS[@]}"; do
   build_and_push_docker $distro
 done
+
+if is_truthy "$INCLUDE_UI_IMAGE"; then
+  build_and_push_ui_docker_image "$VERSION"
+else
+  echo "Skipping UI docker image publish (INCLUDE_UI_IMAGE=$INCLUDE_UI_IMAGE)"
+fi
 
 echo "Done"

@@ -127,13 +127,10 @@ add_bump_version_commit() {
         perl -pi -e "s/llama-stack-client>=.*,/llama-stack-client>=$version\",/" pyproject.toml
 
         if [ "$repo" == "stack" ]; then
-          # Handle both old (llama_stack/ui) and new (src/llama_stack_ui) paths
           if [ -f "src/llama_stack_ui/package.json" ]; then
             UI_PATH="src/llama_stack_ui"
-          elif [ -f "llama_stack/ui/package.json" ]; then
-            UI_PATH="llama_stack/ui"
           else
-            echo "ERROR: Could not find llama_stack_ui/package.json" >&2
+            echo "ERROR: Could not find src/llama_stack_ui/package.json" >&2
             exit 1
           fi
 
@@ -145,6 +142,21 @@ add_bump_version_commit() {
 
       if [ -f "src/llama_stack_client/_version.py" ]; then
         perl -pi -e "s/__version__ = .*$/__version__ = \"$version\"/" src/llama_stack_client/_version.py
+      fi
+    fi
+
+    # Update UI version for stack repo
+    if [ "$repo" == "stack" ]; then
+      if [ -f "src/llama_stack_ui/package.json" ]; then
+        UI_PATH="src/llama_stack_ui"
+      else
+        echo "ERROR: Could not find src/llama_stack_ui/package.json" >&2
+        exit 1
+      fi
+
+      if [ -n "$UI_PATH" ]; then
+        perl -pi -e "s/\"version\": \".*\"/\"version\": \"$version\"/" "$UI_PATH/package.json"
+        (cd "$UI_PATH" && npm install && npm run build)
       fi
     fi
 
@@ -232,6 +244,25 @@ for repo in "${REPOS[@]}"; do
       --skip-existing \
       --non-interactive \
       "dist/*.whl" "dist/*.tar.gz"
+
+    # Publish UI npm package 
+    if [ "$repo" == "stack" ]; then
+      if [ -d "src/llama_stack_ui/dist" ]; then
+        echo "Uploading llama-stack-ui to npm"
+        cd src/llama_stack_ui/dist
+
+        # Check if version already exists on npm
+        if npm view llama-stack-ui@$RELEASE_VERSION version &>/dev/null; then
+          echo "Version $RELEASE_VERSION already exists on npm for llama-stack-ui, skipping publish"
+        else
+          npx yarn publish --access public --tag $RELEASE_VERSION --registry https://registry.npmjs.org/
+        fi
+
+        # Always try to add latest tag since this operation is idempotent
+        npx yarn tag add llama-stack-ui@$RELEASE_VERSION latest || true
+        cd ../../..
+      fi
+    fi
   fi
   cd ..
 done

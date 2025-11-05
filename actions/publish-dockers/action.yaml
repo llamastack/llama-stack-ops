@@ -9,6 +9,11 @@ inputs:
     description: 'Optional comma-separated distributions to publish'
     required: false
     type: string
+  include_ui_image:
+    description: 'Set to false to skip publishing the llamastack/ui image'
+    required: false
+    default: 'true'
+    type: string
   dockerhub_username:
     description: 'DockerHub username'
     required: true
@@ -39,6 +44,7 @@ runs:
       env:
         VERSION: ${{ inputs.version }}
         DISTROS: ${{ inputs.distros }}
+        INCLUDE_UI_IMAGE: ${{ inputs.include_ui_image }}
       run: |
         chmod +x ${{ github.action_path }}/main.sh
         ${{ github.action_path }}/main.sh
