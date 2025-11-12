@@ -56,8 +56,8 @@ build_and_push_docker() {
 
   TMP_BUILD_DIR=$(mktemp -d)
   CONTAINERFILE="$TMP_BUILD_DIR/Containerfile"
-  cat > "$CONTAINERFILE" << EOF
-FROM distribution-$distro:$( [ "$PYPI_SOURCE" = "testpypi" ] && echo "test-${VERSION}" || echo "${VERSION}" )
+  cat >"$CONTAINERFILE" <<EOF
+FROM distribution-$distro:$([ "$PYPI_SOURCE" = "testpypi" ] && echo "test-${VERSION}" || echo "${VERSION}")
 USER root
 
 # Create group with GID 1001 and user with UID 1001
@@ -73,7 +73,7 @@ ENV HOME=/
 USER 1001
 EOF
 
-  docker build -t distribution-$distro:$( [ "$PYPI_SOURCE" = "testpypi" ] && echo "test-${VERSION}" || echo "${VERSION}" ) -f "$CONTAINERFILE" "$TMP_BUILD_DIR"
+  docker build -t distribution-$distro:$([ "$PYPI_SOURCE" = "testpypi" ] && echo "test-${VERSION}" || echo "${VERSION}") -f "$CONTAINERFILE" "$TMP_BUILD_DIR"
   rm -rf "$TMP_BUILD_DIR"
 
   docker images | cat
@@ -84,9 +84,9 @@ EOF
     docker push llamastack/distribution-$distro:test-${VERSION}
   else
     docker tag distribution-$distro:${VERSION} llamastack/distribution-$distro:${VERSION}
-    docker tag distribution-$distro:${VERSION} llamastack/distribution-$distro:latest
+    # docker tag distribution-$distro:${VERSION} llamastack/distribution-$distro:latest
     docker push llamastack/distribution-$distro:${VERSION}
-    docker push llamastack/distribution-$distro:latest
+    # docker push llamastack/distribution-$distro:latest
   fi
 }
 
