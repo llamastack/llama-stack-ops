@@ -46,14 +46,52 @@ jobs:
       with:
         version: ${{ inputs.release_version }}
 
-  publish-docker-images:
+  publish-docker-images-cpu:
     needs:
       - test-published-package
     runs-on: ubuntu-latest
     steps:
+      - name: Free Disk Space
+        run: |
+          echo "Disk space before cleanup:"
+          df -h
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          docker system prune -af --volumes
+          echo "Disk space after cleanup:"
+          df -h
+
       - uses: actions/checkout@v4
       - uses: ./actions/publish-dockers
         with:
           version: ${{ inputs.release_version }}
+          distros: 'starter,postgres-demo,dell'
+          dockerhub_username: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  publish-docker-images-gpu:
+    needs:
+      - test-published-package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Free Disk Space
+        run: |
+          echo "Disk space before cleanup:"
+          df -h
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          docker system prune -af --volumes
+          echo "Disk space after cleanup:"
+          df -h
+
+      - uses: actions/checkout@v4
+      - uses: ./actions/publish-dockers
+        with:
+          version: ${{ inputs.release_version }}
+          distros: 'meta-reference-gpu,starter-gpu'
           dockerhub_username: ${{ secrets.DOCKERHUB_USERNAME }}
           dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
