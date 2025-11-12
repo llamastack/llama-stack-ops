@@ -32,6 +32,10 @@ run_precommit_lockfile_update() {
   # Use pre-commit to update lockfiles (uv.lock and package-lock.json)
   # For RC builds, LLAMA_STACK_RELEASE_MODE=true with UV config pointing to test.pypi
   # Note: pre-commit exits with non-zero when it modifies files, which is expected
+  if ! command -v pre-commit &> /dev/null; then
+    echo "ERROR: pre-commit is not installed" >&2
+    exit 1
+  fi
   echo "Running pre-commit to update lockfiles..."
   UV_EXTRA_INDEX_URL="https://test.pypi.org/simple/" \
     UV_INDEX_STRATEGY="unsafe-best-match" \
@@ -122,12 +126,23 @@ for repo in "${REPOS[@]}"; do
   cd ..
 done
 
+# Push TypeScript tag immediately since it doesn't need lockfile updates
+for repo in "${REPOS[@]}"; do
+  if [ "$repo" == "stack-client-typescript" ]; then
+    cd llama-$repo
+    org=$(github_org $repo)
+    echo "Pushing tag for llama-$repo (no lockfile updates needed)"
+    git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/$org/llama-$repo.git" "v$VERSION"
+    cd ..
+  fi
+done
+
 # Update lockfiles now that packages are published to test.pypi
 # Force-move tags to include lockfile updates
 echo "Updating lockfiles after publishing to test.pypi..."
 for repo in "${REPOS[@]}"; do
   if [ "$repo" == "stack-client-typescript" ]; then
-    # TypeScript client doesn't need lockfile updates
+    # TypeScript client doesn't need lockfile updates (already pushed above)
     continue
   fi
 
