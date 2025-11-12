@@ -41,8 +41,8 @@ dependencies = [
     "llama-stack-client>=0.0.1",
 ]
 EOF
-    mkdir -p llama_stack/ui
-    cat > llama_stack/ui/package.json <<'EOF'
+    mkdir -p llama_stack_ui
+    cat > llama_stack_ui/package.json <<'EOF'
 {
   "name": "llama-stack-ui",
   "version": "0.0.1",
@@ -136,7 +136,7 @@ for repo in llama-stack-client-python llama-stack-client-typescript llama-stack;
     if [ "$repo" = "llama-stack" ]; then
       # Update client dependency
       perl -pi -e "s/llama-stack-client>=.*/llama-stack-client>=$VERSION\",/" pyproject.toml
-      perl -pi -e "s/(\"llama-stack-client\": \").+\"/\1^$VERSION\"/" llama_stack/ui/package.json
+      perl -pi -e "s/(\"llama-stack-client\": \").+\"/\1^$VERSION\"/" llama_stack_ui/package.json
     fi
   fi
 
@@ -162,11 +162,11 @@ for repo in llama-stack-client-python llama-stack-client-typescript llama-stack;
   # Verify client dependency updated for stack
   if [ "$repo" = "llama-stack" ]; then
     if grep -q "llama-stack-client>=$VERSION" pyproject.toml && \
-       grep -q "\"llama-stack-client\": \"^$VERSION\"" llama_stack/ui/package.json; then
+       grep -q "\"llama-stack-client\": \"^$VERSION\"" llama_stack_ui/package.json; then
       log_pass "$repo: Client dependencies updated"
     else
       log_fail "$repo: Client dependencies not updated correctly"
-      grep "llama-stack-client" pyproject.toml llama_stack/ui/package.json
+      grep "llama-stack-client" pyproject.toml llama_stack_ui/package.json
       continue
     fi
   fi
@@ -220,7 +220,7 @@ for repo in llama-stack-client-python llama-stack-client-typescript llama-stack;
 
     if [ "$repo" = "llama-stack" ]; then
       perl -pi -e "s/llama-stack-client>=.*/llama-stack-client>=$VERSION\",/" pyproject.toml
-      perl -pi -e "s/(\"llama-stack-client\": \").+\"/\1^$VERSION\"/" llama_stack/ui/package.json
+      perl -pi -e "s/(\"llama-stack-client\": \").+\"/\1^$VERSION\"/" llama_stack_ui/package.json
     fi
   fi
 
