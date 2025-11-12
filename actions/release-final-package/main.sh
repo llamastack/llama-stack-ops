@@ -80,10 +80,17 @@ if [ $found_rc -eq 0 ]; then
   exit 1
 fi
 
-REPOS=(stack-client-python stack-client-typescript stack)
+CLIENT_REPOS=(stack-client-python stack-client-typescript)
+STACK_REPOS=(stack)
+
+# For LLAMA_STACK_ONLY mode, skip clients
 if is_truthy "$LLAMA_STACK_ONLY"; then
-  REPOS=(stack)
+  CLIENT_REPOS=()
+  STACK_REPOS=(stack)
 fi
+
+# Combined list for validation
+REPOS=("${CLIENT_REPOS[@]}" "${STACK_REPOS[@]}")
 
 # check that tag v$RC_VERSION exists for all repos. each repo is remote
 # github.com/meta-llama/llama-$repo.git
@@ -96,6 +103,50 @@ for repo in "${REPOS[@]}"; do
 done
 
 set -x
+
+# Verify that a package is available on npm registry
+verify_npm_package() {
+  local package_name=$1
+  local version=$2
+  local max_attempts=30
+  local attempt=1
+
+  echo "Verifying $package_name@$version is available on npm..."
+  while [ $attempt -le $max_attempts ]; do
+    if npm view "$package_name@$version" version &>/dev/null; then
+      echo "✅ $package_name@$version is available on npm"
+      return 0
+    fi
+    echo "Attempt $attempt/$max_attempts: $package_name@$version not yet available, waiting 10 seconds..."
+    sleep 10
+    ((attempt++))
+  done
+
+  echo "ERROR: $package_name@$version not available on npm after $max_attempts attempts" >&2
+  return 1
+}
+
+# Verify that a package is available on PyPI registry
+verify_pypi_package() {
+  local package_name=$1
+  local version=$2
+  local max_attempts=30
+  local attempt=1
+
+  echo "Verifying $package_name==$version is available on PyPI..."
+  while [ $attempt -le $max_attempts ]; do
+    if curl -s "https://pypi.org/pypi/$package_name/json" | jq -e ".releases.\"$version\"" &>/dev/null; then
+      echo "✅ $package_name==$version is available on PyPI"
+      return 0
+    fi
+    echo "Attempt $attempt/$max_attempts: $package_name==$version not yet available, waiting 10 seconds..."
+    sleep 10
+    ((attempt++))
+  done
+
+  echo "ERROR: $package_name==$version not available on PyPI after $max_attempts attempts" >&2
+  return 1
+}
 
 run_precommit_lockfile_update() {
   # Use pre-commit to update lockfiles (uv.lock and package-lock.json)
@@ -173,7 +224,14 @@ source build-env/bin/activate
 uv pip install twine
 npm install -g yarn
 
-for repo in "${REPOS[@]}"; do
+# ============================================================================
+# PHASE 1: Build client packages (stack-client-python, stack-client-typescript)
+# ============================================================================
+echo "========================================="
+echo "PHASE 1: Building client packages"
+echo "========================================="
+
+for repo in "${CLIENT_REPOS[@]}"; do
   org=$(github_org $repo)
   git clone "https://x-access-token:${GITHUB_TOKEN}@github.com/$org/llama-$repo.git"
   cd llama-$repo
@@ -202,6 +260,89 @@ for repo in "${REPOS[@]}"; do
   cd ..
 done
 
+# ============================================================================
+# PHASE 2: Publish client packages
+# ============================================================================
+if ! is_truthy "$DRY_RUN"; then
+  echo "========================================="
+  echo "PHASE 2: Publishing client packages"
+  echo "========================================="
+
+  for repo in "${CLIENT_REPOS[@]}"; do
+    cd llama-$repo
+    if [ "$repo" == "stack-client-typescript" ]; then
+      echo "Uploading llama-$repo to npm"
+      cd dist
+
+      # Check if version already exists on npm
+      if npm view llama-stack-client@$RELEASE_VERSION version &>/dev/null; then
+        echo "Version $RELEASE_VERSION already exists on npm for llama-stack-client, skipping publish"
+      else
+        npx yarn publish --access public --tag $RELEASE_VERSION --registry https://registry.npmjs.org/
+      fi
+
+      # Always try to add latest tag since this operation is idempotent
+      npx yarn tag add llama-stack-client@$RELEASE_VERSION latest || true
+      cd ..
+    else
+      echo "Uploading llama-$repo to pypi"
+      python -m twine upload \
+        --skip-existing \
+        --non-interactive \
+        "dist/*.whl" "dist/*.tar.gz"
+    fi
+    cd ..
+  done
+
+  # ============================================================================
+  # PHASE 3: Verify client packages are available on registries
+  # ============================================================================
+  echo "========================================="
+  echo "PHASE 3: Verifying client packages"
+  echo "========================================="
+
+  for repo in "${CLIENT_REPOS[@]}"; do
+    if [ "$repo" == "stack-client-typescript" ]; then
+      verify_npm_package "llama-stack-client" "$RELEASE_VERSION"
+    elif [ "$repo" == "stack-client-python" ]; then
+      verify_pypi_package "llama-stack-client" "$RELEASE_VERSION"
+    fi
+  done
+else
+  echo "DRY RUN: skipping client package upload and verification"
+fi
+
+# ============================================================================
+# PHASE 4: Build stack package (now that client dependencies are available)
+# ============================================================================
+echo "========================================="
+echo "PHASE 4: Building stack package"
+echo "========================================="
+
+for repo in "${STACK_REPOS[@]}"; do
+  org=$(github_org $repo)
+  git clone "https://x-access-token:${GITHUB_TOKEN}@github.com/$org/llama-$repo.git"
+  cd llama-$repo
+  git fetch origin refs/tags/v${RC_VERSION}:refs/tags/v${RC_VERSION}
+  git checkout -b release-$RELEASE_VERSION refs/tags/v${RC_VERSION}
+  git fetch origin --prune
+
+  # don't run uv lock here because the dependency isn't pushed upstream so uv will fail
+  add_bump_version_commit $repo $RELEASE_VERSION false
+
+  # Only create the tag if it doesn't already exist
+  if ! git tag -l "v$RELEASE_VERSION" | grep -q .; then
+    git tag -a "v$RELEASE_VERSION" -m "Release version $RELEASE_VERSION"
+  else
+    echo "Tag v$RELEASE_VERSION already exists, skipping tag creation"
+  fi
+
+  uv build -q
+  uv pip install dist/*.whl
+
+  cd ..
+done
+
 which llama
 llama stack list-apis
 llama stack list-providers inference
@@ -209,36 +350,28 @@ llama stack list-providers inference
 # just check if llama stack list-deps works
 llama stack list-deps starter
 
-if is_truthy "$DRY_RUN"; then
-  echo "DRY RUN: skipping pypi upload"
-  exit 0
-fi
+# ============================================================================
+# PHASE 5: Publish stack package
+# ============================================================================
+if ! is_truthy "$DRY_RUN"; then
+  echo "========================================="
+  echo "PHASE 5: Publishing stack package"
+  echo "========================================="
 
-for repo in "${REPOS[@]}"; do
-  cd llama-$repo
-  if [ "$repo" == "stack-client-typescript" ]; then
-    echo "Uploading llama-$repo to npm"
-    cd dist
-
-    # Check if version already exists on npm
-    if npm view llama-stack-client@$RELEASE_VERSION version &>/dev/null; then
-      echo "Version $RELEASE_VERSION already exists on npm for llama-stack-client, skipping publish"
-    else
-      npx yarn publish --access public --tag $RELEASE_VERSION --registry https://registry.npmjs.org/
-    fi
-
-    # Always try to add latest tag since this operation is idempotent
-    npx yarn tag add llama-stack-client@$RELEASE_VERSION latest || true
-    cd ..
-  else
+  for repo in "${STACK_REPOS[@]}"; do
+    cd llama-$repo
     echo "Uploading llama-$repo to pypi"
     python -m twine upload \
       --skip-existing \
       --non-interactive \
       "dist/*.whl" "dist/*.tar.gz"
-  fi
-  cd ..
-done
+    cd ..
+  done
+else
+  echo "DRY RUN: skipping stack package upload"
+  # In dry run mode, exit before lockfile updates and git push
+  exit 0
+fi
 
 deactivate
 rm -rf build-env
