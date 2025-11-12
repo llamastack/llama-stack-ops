@@ -96,6 +96,13 @@ build_packages() {
       uv pip install dist/*.whl
     fi
 
+    # Patch conftest.py to fix deprecated pytest parameter
+    if [ "$repo" == "stack" ]; then
+      echo "Patching conftest.py to fix pytest deprecation warning..."
+      perl -pi -e 's/def pytest_ignore_collect\(path: str, config: pytest\.Config\) -> bool:/def pytest_ignore_collect(collection_path: Path, config: pytest.Config) -> bool:/' tests/integration/conftest.py
+      perl -pi -e 's/p = Path\(str\(path\)\)\.resolve\(\)/p = collection_path.resolve()/' tests/integration/conftest.py
+    fi
+
     git commit -am "Release candidate $VERSION"
     cd ..
   done

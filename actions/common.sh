@@ -10,6 +10,7 @@ github_org() {
 run_integration_tests() {
   stack_config=$1
 
+  install_dependencies
   echo "Running integration tests (text)"
   bash llama-stack/scripts/integration-tests.sh \
     --stack-config $stack_config \
@@ -24,10 +25,11 @@ run_integration_tests() {
 }
 
 install_dependencies() {
-  uv pip install pytest pytest-asyncio
+  echo "Installing pytest dependencies"
+  uv pip install --upgrade pytest pytest-asyncio pytest-cov pytest-xdist
 }
 
 test_llama_cli() {
   uv pip list | grep llama
-  llama stack list-apis > /dev/null
+  llama stack list-apis >/dev/null
 }
