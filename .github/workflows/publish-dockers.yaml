@@ -11,6 +11,11 @@ on:
         description: 'Optional comma-separated distributions to publish'
         required: false
         type: string
+      include_ui_image:
+        description: 'Set to false to skip publishing the UI Docker image'
+        required: false
+        default: true
+        type: boolean
 
 jobs:
   publish-cpu-distros:
@@ -88,5 +93,6 @@ jobs:
       with:
         version: ${{ inputs.version }}
         distros: ${{ inputs.distros }}
+        include_ui_image: ${{ inputs.include_ui_image }}
         dockerhub_username: ${{ secrets.DOCKERHUB_USERNAME }}
         dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
