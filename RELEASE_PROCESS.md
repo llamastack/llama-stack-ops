@@ -10,6 +10,20 @@ release-0.1.x ← v0.1.0rc1, v0.1.0rc2, v0.1.0, v0.1.1rc1, v0.1.1, ...
 release-0.2.x ← v0.2.0rc1, v0.2.0, ...
 ```
 
+## Packages
+
+The release process handles multiple packages across different repositories:
+
+- **Python packages** (published to PyPI/test.pypi):
+  - `llama-stack-client` (from `llama-stack-client-python` repo)
+  - `llama-stack` (from `llama-stack` repo)
+
+- **npm packages** (published to npmjs.org):
+  - `llama-stack-client` (from `llama-stack-client-typescript` repo)
+  - `llama-stack-ui` (from `llama-stack` repo at `src/llama_stack_ui/`)
+
+All packages are versioned together and released synchronously. Note that the UI package is built and published as part of the `llama-stack` repository release process.
+
 ## Workflows
 
 **Cut Release Candidate** (`cut-release-candidate.yaml`)

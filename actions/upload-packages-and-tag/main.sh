@@ -102,6 +102,17 @@ for repo in "${REPOS[@]}"; do
     PYPROJECT_VERSION=$(cat pyproject.toml | grep version)
     echo "version to build: $PYPROJECT_VERSION"
 
+    # Build UI package 
+    if [ "$repo" == "stack" ]; then
+      if [ -d "src/llama_stack_ui" ]; then
+        echo "Building llama-stack-ui npm package..."
+        cd src/llama_stack_ui
+        npx yarn install
+        npx yarn build
+        cd ../..
+      fi
+    fi
+
     uv build -q
     uv pip install dist/*.whl
   fi
@@ -121,6 +132,16 @@ for repo in "${REPOS[@]}"; do
       --repository-url https://test.pypi.org/legacy/ \
       --skip-existing \
       dist/*.whl dist/*.tar.gz
+
+    # Publish UI npm package 
+    if [ "$repo" == "stack" ]; then
+      if [ -d "src/llama_stack_ui/dist" ]; then
+        echo "Uploading llama-stack-ui to npm"
+        cd src/llama_stack_ui/dist
+        npx yarn publish --access public --tag rc-$VERSION --registry https://registry.npmjs.org/
+        cd ../../..
+      fi
+    fi
   fi
 
   cd ..

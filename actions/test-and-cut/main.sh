@@ -175,27 +175,37 @@ build_packages() {
       fi
     fi
 
-    # TODO: this is dangerous use uvx toml-cli toml set project.version $VERSION instead of this
-    perl -pi -e "s/^version = .*$/version = \"$VERSION\"/" pyproject.toml
-
-    if ! is_truthy "$LLAMA_STACK_ONLY"; then
-      # this one is only applicable for llama-stack-client-python
-      if [ -f "src/llama_stack_client/_version.py" ]; then
-        perl -pi -e "s/__version__ = .*$/__version__ = \"$VERSION\"/" src/llama_stack_client/_version.py
-      fi
-      if [ -f "package.json" ]; then
-        perl -pi -e "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" package.json
-      fi
-
-      # this is applicable for llama-stack repo but we should not do it when
-      # LLAMA_STACK_ONLY is true
-      perl -pi -e "s/llama-stack-client>=.*/llama-stack-client>=$VERSION\",/" pyproject.toml
-    fi
-
     if [ "$repo" == "stack-client-typescript" ]; then
+      # TypeScript client package - update package.json version
+      perl -pi -e "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" package.json
       npx yarn install
       npx yarn build
     else
+      # Python packages - update pyproject.toml version
+      # TODO: this is dangerous use uvx toml-cli toml set project.version $VERSION instead of this
+      perl -pi -e "s/^version = .*$/version = \"$VERSION\"/" pyproject.toml
+
+      if ! is_truthy "$LLAMA_STACK_ONLY"; then
+        # this one is only applicable for llama-stack-client-python
+        if [ -f "src/llama_stack_client/_version.py" ]; then
+          perl -pi -e "s/__version__ = .*$/__version__ = \"$VERSION\"/" src/llama_stack_client/_version.py
+        fi
+
+        # this is applicable for llama-stack repo but we should not do it when
+        # LLAMA_STACK_ONLY is true
+        perl -pi -e "s/llama-stack-client>=.*/llama-stack-client>=$VERSION\",/" pyproject.toml
+      fi
+
+      # Build UI package
+      if [ "$repo" == "stack" ]; then
+        echo "Building llama-stack-ui npm package..."
+        cd src/llama_stack_ui
+        perl -pi -e "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" package.json
+        npx yarn install
+        npx yarn build
+        cd ../..
+      fi
+
       uv build -q
       uv pip install dist/*.whl
     fi
