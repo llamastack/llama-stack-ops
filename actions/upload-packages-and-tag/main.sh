@@ -13,7 +13,7 @@ fi
 GITHUB_TOKEN=${GITHUB_TOKEN:-}
 LLAMA_STACK_ONLY=${LLAMA_STACK_ONLY:-false}
 
-source $(dirname $0)/../common.sh
+source $(dirname "$0")/../common.sh
 
 set -euo pipefail
 set -x
@@ -104,6 +104,15 @@ for repo in "${REPOS[@]}"; do
 
     uv build -q
     uv pip install dist/*.whl
+
+    # Build llama_stack_api if it exists
+    if [ "$repo" == "stack" ] && [ -d "src/llama_stack_api" ] && [ -f "src/llama_stack_api/pyproject.toml" ]; then
+      echo "Building llama_stack_api"
+      cd src/llama_stack_api
+      uv build -q
+      uv pip install dist/*.whl
+      cd -
+    fi
   fi
 
   # tag the commit on the branch (will be force-moved after lockfile updates)
@@ -121,6 +130,17 @@ for repo in "${REPOS[@]}"; do
       --repository-url https://test.pypi.org/legacy/ \
       --skip-existing \
       dist/*.whl dist/*.tar.gz
+
+    # Upload llama_stack_api if it exists
+    if [ "$repo" == "stack" ] && [ -d "src/llama_stack_api" ] && [ -f "src/llama_stack_api/pyproject.toml" ]; then
+      echo "Uploading llama_stack_api to testpypi"
+      cd src/llama_stack_api
+      python -m twine upload \
+        --repository-url https://test.pypi.org/legacy/ \
+        --skip-existing \
+        dist/*.whl dist/*.tar.gz
+      cd -
+    fi
   fi
 
   cd ..

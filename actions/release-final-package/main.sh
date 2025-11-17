@@ -216,6 +216,15 @@ add_bump_version_commit() {
   fi
 }
 
+# Function to handle llama_stack_api subdirectory
+bump_version_llama_stack_api() {
+  local version=$1
+  if [ -d "src/llama_stack_api" ] && [ -f "src/llama_stack_api/pyproject.toml" ]; then
+    echo "Bumping version for llama_stack_api to $version"
+    perl -pi -e "s/^version = .*$/version = \"$version\"/" src/llama_stack_api/pyproject.toml
+  fi
+}
+
 TMPDIR=$(mktemp -d)
 cd $TMPDIR
 uv venv build-env
@@ -327,8 +336,13 @@ for repo in "${STACK_REPOS[@]}"; do
   git checkout -b release-$RELEASE_VERSION refs/tags/v${RC_VERSION}
   git fetch origin --prune
 
+  # Handle llama_stack_api version bump before committing (so it's included in the commit)
+  if [ "$repo" == "stack" ]; then
+    bump_version_llama_stack_api "$RELEASE_VERSION"
+  fi
+
   # don't run uv lock here because the dependency isn't pushed upstream so uv will fail
-  add_bump_version_commit $repo $RELEASE_VERSION false
+  add_bump_version_commit "$repo" "$RELEASE_VERSION" false
 
   # Only create the tag if it doesn't already exist
   if ! git tag -l "v$RELEASE_VERSION" | grep -q .; then
@@ -339,6 +353,15 @@ for repo in "${STACK_REPOS[@]}"; do
 
   uv build -q
   uv pip install dist/*.whl
+
+  # Build llama_stack_api if it exists
+  if [ "$repo" == "stack" ] && [ -d "src/llama_stack_api" ] && [ -f "src/llama_stack_api/pyproject.toml" ]; then
+    echo "Building llama_stack_api"
+    cd src/llama_stack_api
+    uv build -q
+    uv pip install dist/*.whl
+    cd -
+  fi
 
   cd ..
 done
@@ -365,6 +388,17 @@ if ! is_truthy "$DRY_RUN"; then
       --skip-existing \
       --non-interactive \
       "dist/*.whl" "dist/*.tar.gz"
+
+    # Upload llama_stack_api if it exists
+    if [ "$repo" == "stack" ] && [ -d "src/llama_stack_api" ] && [ -f "src/llama_stack_api/pyproject.toml" ]; then
+      echo "Uploading llama_stack_api to pypi"
+      cd src/llama_stack_api
+      python -m twine upload \
+        --skip-existing \
+        --non-interactive \
+        "dist/*.whl" "dist/*.tar.gz"
+      cd -
+    fi
     cd ..
   done
 else
