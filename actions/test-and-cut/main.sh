@@ -215,10 +215,15 @@ build_packages() {
       fi
     fi
 
-    if [ "$IS_DEV_BUILD" = "true" ]; then
-      git commit -am "Dev build $VERSION"
+    # Only commit if there are changes
+    if ! git diff --quiet || ! git diff --cached --quiet; then
+      if [ "$IS_DEV_BUILD" = "true" ]; then
+        git commit -am "Dev build $VERSION"
+      else
+        git commit -am "Release candidate $VERSION"
+      fi
     else
-      git commit -am "Release candidate $VERSION"
+      echo "No version changes detected for $repo (version already set to $VERSION)"
     fi
     cd ..
   done
