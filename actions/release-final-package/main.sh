@@ -175,6 +175,11 @@ add_bump_version_commit() {
     # cringe perl code
     perl -pi -e "s/^version = .*$/version = \"$version\"/" pyproject.toml
 
+    # Also bump llama_stack_api version if this is the stack repo
+    if [ "$repo" == "stack" ]; then
+      bump_version_llama_stack_api "$version"
+    fi
+
     if ! is_truthy "$LLAMA_STACK_ONLY"; then
       # Only update client dependency for non-dev versions
       # Dev versions (e.g., 0.1.1.dev0) should keep the last stable client dependency
@@ -336,11 +341,6 @@ for repo in "${STACK_REPOS[@]}"; do
   git checkout -b release-$RELEASE_VERSION refs/tags/v${RC_VERSION}
   git fetch origin --prune
 
-  # Handle llama_stack_api version bump before committing (so it's included in the commit)
-  if [ "$repo" == "stack" ]; then
-    bump_version_llama_stack_api "$RELEASE_VERSION"
-  fi
-
   # don't run uv lock here because the dependency isn't pushed upstream so uv will fail
   add_bump_version_commit "$repo" "$RELEASE_VERSION" false
 
@@ -351,10 +351,7 @@ for repo in "${STACK_REPOS[@]}"; do
     echo "Tag v$RELEASE_VERSION already exists, skipping tag creation"
   fi
 
-  uv build -q
-  uv pip install dist/*.whl
-
-  # Build llama_stack_api if it exists
+  # Build llama_stack_api first if it exists (it's a dependency of llama-stack)
   if [ "$repo" == "stack" ] && [ -d "src/llama_stack_api" ] && [ -f "src/llama_stack_api/pyproject.toml" ]; then
     echo "Building llama_stack_api"
     cd src/llama_stack_api
@@ -362,6 +359,9 @@ for repo in "${STACK_REPOS[@]}"; do
     uv pip install dist/*.whl
     cd -
   fi
+
+  uv build -q
+  uv pip install dist/*.whl
 
   cd ..
 done
