@@ -202,10 +202,7 @@ build_packages() {
       npx yarn install
       npx yarn build
     else
-      uv build -q
-      uv pip install dist/*.whl
-
-      # Build llama_stack_api if it exists
+      # Build llama_stack_api first if it exists (it's a dependency of llama-stack)
       if [ "$repo" == "stack" ] && [ -d "src/llama_stack_api" ] && [ -f "src/llama_stack_api/pyproject.toml" ]; then
         echo "Building llama_stack_api"
         cd src/llama_stack_api
@@ -213,6 +210,9 @@ build_packages() {
         uv pip install dist/*.whl
         cd -
       fi
+
+      uv build -q
+      uv pip install dist/*.whl
     fi
 
     # Only commit if there are changes
