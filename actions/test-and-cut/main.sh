@@ -178,6 +178,12 @@ build_packages() {
     # TODO: this is dangerous use uvx toml-cli toml set project.version $VERSION instead of this
     perl -pi -e "s/^version = .*$/version = \"$VERSION\"/" pyproject.toml
 
+    # Handle llama_stack_api version bump
+    if [ "$repo" == "stack" ] && [ -d "src/llama_stack_api" ] && [ -f "src/llama_stack_api/pyproject.toml" ]; then
+      echo "Bumping version for llama_stack_api to $VERSION"
+      perl -pi -e "s/^version = .*$/version = \"$VERSION\"/" src/llama_stack_api/pyproject.toml
+    fi
+
     if ! is_truthy "$LLAMA_STACK_ONLY"; then
       # this one is only applicable for llama-stack-client-python
       if [ -f "src/llama_stack_client/_version.py" ]; then
@@ -198,6 +204,15 @@ build_packages() {
     else
       uv build -q
       uv pip install dist/*.whl
+
+      # Build llama_stack_api if it exists
+      if [ "$repo" == "stack" ] && [ -d "src/llama_stack_api" ] && [ -f "src/llama_stack_api/pyproject.toml" ]; then
+        echo "Building llama_stack_api"
+        cd src/llama_stack_api
+        uv build -q
+        uv pip install dist/*.whl
+        cd -
+      fi
     fi
 
     if [ "$IS_DEV_BUILD" = "true" ]; then
