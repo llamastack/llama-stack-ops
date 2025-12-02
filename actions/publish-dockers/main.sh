@@ -1,5 +1,11 @@
 #!/bin/bash
 
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the terms described in the LICENSE file in
+# the root directory of this source tree.
+
 if [ -z "$VERSION" ]; then
   echo "You must set the VERSION environment variable" >&2
   exit 1
@@ -48,11 +54,11 @@ build_and_push_docker() {
   distro=$1
 
   echo "Building and pushing docker for distro $distro"
-  
+
   # Clone llama-stack repo to get the Containerfile
   LLAMA_STACK_DIR=$(mktemp -d)
   git clone --depth 1 https://github.com/llamastack/llama-stack.git "$LLAMA_STACK_DIR"
-  
+
   # Determine the tag suffix and build args based on PyPI source
   if [ "$PYPI_SOURCE" = "testpypi" ]; then
     TAG_SUFFIX="test-${VERSION}"
