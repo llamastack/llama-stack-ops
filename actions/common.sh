@@ -11,6 +11,10 @@ github_org() {
 run_integration_tests() {
   stack_config=$1
 
+  # Point to recordings in the git checkout, not the installed wheel
+  # This is necessary because wheels don't include test recordings
+  export LLAMA_STACK_TEST_RECORDING_DIR="$(pwd)/llama-stack/tests/integration/common"
+
   echo "Running integration tests (text)"
   bash llama-stack/scripts/integration-tests.sh \
     --stack-config $stack_config \
