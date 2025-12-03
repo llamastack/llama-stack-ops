@@ -15,13 +15,15 @@ run_integration_tests() {
   bash llama-stack/scripts/integration-tests.sh \
     --stack-config $stack_config \
     --inference-mode replay \
-    --suite base
+    --suite base \
+    --setup ollama
 
   echo "Running integration tests (vision)"
   bash llama-stack/scripts/integration-tests.sh \
     --stack-config $stack_config \
     --inference-mode replay \
-    --suite vision
+    --suite vision \
+    --setup ollama
 }
 
 install_dependencies() {
