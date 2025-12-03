@@ -105,8 +105,8 @@ determine_source_commit_for_repo() {
       git fetch origin "$RELEASE_BRANCH"
 
       # Check if commit is related to the branch (ancestor or descendant)
-      if ! git merge-base --is-ancestor "$COMMIT_HASH" "origin/$RELEASE_BRANCH" && \
-         ! git merge-base --is-ancestor "origin/$RELEASE_BRANCH" "$COMMIT_HASH"; then
+      if ! git merge-base --is-ancestor "$COMMIT_HASH" "origin/$RELEASE_BRANCH" &&
+        ! git merge-base --is-ancestor "origin/$RELEASE_BRANCH" "$COMMIT_HASH"; then
         echo "ERROR: Commit $COMMIT_HASH is not related to branch $RELEASE_BRANCH" >&2
         echo "ERROR: The commit must be an ancestor or descendant of the release branch" >&2
         exit 1
@@ -270,6 +270,7 @@ test_docker() {
     -e SAFETY_MODEL=ollama/llama-guard3:1b \
     -e LLAMA_STACK_TEST_INFERENCE_MODE=replay \
     -e LLAMA_STACK_TEST_STACK_CONFIG_TYPE=server \
+    -e LLAMA_STACK_TEST_RECORDING_DIR=/app/llama-stack-source/tests/integration/common \
     -v $(pwd)/llama-stack:/app/llama-stack-source \
     distribution-$DISTRO:dev \
     --port $LLAMA_STACK_PORT
