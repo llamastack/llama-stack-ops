@@ -24,7 +24,7 @@ if ! git ls-remote --tags https://github.com/meta-llama/llama-stack.git "refs/ta
   exit 1
 fi
 
-DISTRO=ci-tests
+DISTRO=starter
 
 TMPDIR=$(mktemp -d)
 cd $TMPDIR
@@ -55,7 +55,7 @@ done
 
 test_llama_cli
 
-distros_to_build=("$DISTRO")
+distros_to_build=("starter")
 for build_distro in "${distros_to_build[@]}"; do
   echo "Installing dependencies for $build_distro distribution"
   llama stack list-deps $build_distro | xargs -L1 uv pip install
@@ -63,7 +63,7 @@ done
 
 install_dependencies
 
-git clone --depth 1 https://github.com/llamastack/llama-stack.git
+git clone --depth 1 https://github.com/meta-llama/llama-stack.git
 cd llama-stack
 
 git fetch origin refs/tags/v${VERSION}:refs/tags/v${VERSION}

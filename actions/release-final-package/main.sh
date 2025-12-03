@@ -158,7 +158,7 @@ run_precommit_lockfile_update() {
   # Use pre-commit to update lockfiles (uv.lock and package-lock.json)
   # LLAMA_STACK_RELEASE_MODE=true signals hooks to update lockfiles
   # Note: pre-commit exits with non-zero when it modifies files, which is expected
-  if ! command -v pre-commit &>/dev/null; then
+  if ! command -v pre-commit &> /dev/null; then
     echo "ERROR: pre-commit is not installed" >&2
     exit 1
   fi
@@ -377,7 +377,7 @@ llama stack list-apis
 llama stack list-providers inference
 
 # just check if llama stack list-deps works
-llama stack list-deps ci-tests
+llama stack list-deps starter
 
 # ============================================================================
 # PHASE 5: Publish stack package
@@ -432,7 +432,7 @@ for repo in "${REPOS[@]}"; do
   source lockfile-update-env/bin/activate
 
   # Install pre-commit if not already available
-  if ! command -v pre-commit &>/dev/null; then
+  if ! command -v pre-commit &> /dev/null; then
     uv pip install pre-commit
   fi
 

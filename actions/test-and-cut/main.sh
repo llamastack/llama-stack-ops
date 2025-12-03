@@ -76,7 +76,7 @@ else
   echo "Derived release branch: $RELEASE_BRANCH"
 fi
 
-DISTRO=ci-tests
+DISTRO=starter
 
 TMPDIR=$(mktemp -d)
 cd $TMPDIR
@@ -105,8 +105,8 @@ determine_source_commit_for_repo() {
       git fetch origin "$RELEASE_BRANCH"
 
       # Check if commit is related to the branch (ancestor or descendant)
-      if ! git merge-base --is-ancestor "$COMMIT_HASH" "origin/$RELEASE_BRANCH" &&
-        ! git merge-base --is-ancestor "origin/$RELEASE_BRANCH" "$COMMIT_HASH"; then
+      if ! git merge-base --is-ancestor "$COMMIT_HASH" "origin/$RELEASE_BRANCH" && \
+         ! git merge-base --is-ancestor "origin/$RELEASE_BRANCH" "$COMMIT_HASH"; then
         echo "ERROR: Commit $COMMIT_HASH is not related to branch $RELEASE_BRANCH" >&2
         echo "ERROR: The commit must be an ancestor or descendant of the release branch" >&2
         exit 1
