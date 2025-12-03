@@ -266,7 +266,7 @@ test_docker() {
   export LLAMA_STACK_PORT=8321
 
   docker run -d --network host --name llama-stack-$DISTRO -p $LLAMA_STACK_PORT:$LLAMA_STACK_PORT \
-    -e OLLAMA_URL=http://localhost:11434 \
+    -e OLLAMA_URL=http://localhost:11434/v1 \
     -e SAFETY_MODEL=ollama/llama-guard3:1b \
     -e LLAMA_STACK_TEST_INFERENCE_MODE=replay \
     -e LLAMA_STACK_TEST_STACK_CONFIG_TYPE=server \
