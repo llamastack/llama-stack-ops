@@ -277,6 +277,9 @@ test_docker() {
     distribution-$DISTRO:dev \
     --port $LLAMA_STACK_PORT
 
+  # Ensure docker logs are saved even if tests fail
+  trap 'docker logs llama-stack-$DISTRO > docker-$DISTRO.log 2>&1 || true; docker stop llama-stack-$DISTRO || true' EXIT
+
   # check localhost:$LLAMA_STACK_PORT/health repeatedly until it returns 200
   iterations=0
   max_iterations=20
@@ -292,8 +295,12 @@ test_docker() {
 
   run_integration_tests http://localhost:$LLAMA_STACK_PORT
 
-  # stop the container
+  # save docker logs and stop the container (trap will also handle cleanup on failure)
+  docker logs llama-stack-$DISTRO > docker-$DISTRO.log 2>&1
   docker stop llama-stack-$DISTRO
+
+  # Clear the trap since we've completed successfully
+  trap - EXIT
 }
 
 build_packages
