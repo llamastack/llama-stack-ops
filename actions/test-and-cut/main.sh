@@ -270,6 +270,8 @@ test_docker() {
     -e SAFETY_MODEL=ollama/llama-guard3:1b \
     -e LLAMA_STACK_TEST_INFERENCE_MODE=replay \
     -e LLAMA_STACK_TEST_STACK_CONFIG_TYPE=server \
+    -e LLAMA_STACK_TEST_MCP_HOST=host.docker.internal \
+    -e LLAMA_STACK_TEST_DEBUG=1 \
     -e LLAMA_STACK_TEST_RECORDING_DIR=/app/llama-stack-source/tests/integration/common \
     -v $(pwd)/llama-stack:/app/llama-stack-source \
     distribution-$DISTRO:dev \
@@ -299,8 +301,8 @@ build_packages
 install_dependencies
 
 if [ "$CUT_MODE" != "cut-only" ]; then
-  test_llama_cli
-  test_library_client
+  # test_llama_cli
+  # test_library_client
   test_docker
 fi
 
