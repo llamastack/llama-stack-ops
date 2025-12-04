@@ -105,20 +105,20 @@ for repo in "${REPOS[@]}"; do
     npx yarn install
     npx yarn build
   else
-    PYPROJECT_VERSION=$(cat pyproject.toml | grep version)
-    echo "version to build: $PYPROJECT_VERSION"
-
-    uv build -q
-    uv pip install dist/*.whl
-
-    # Build llama_stack_api if it exists
+    # Build llama_stack_api first if it exists (main package depends on it)
     if [ "$repo" == "stack" ] && [ -d "src/llama_stack_api" ] && [ -f "src/llama_stack_api/pyproject.toml" ]; then
-      echo "Building llama_stack_api"
+      echo "Building llama_stack_api first (dependency of llama-stack)"
       cd src/llama_stack_api
       uv build -q
       uv pip install dist/*.whl
       cd -
     fi
+
+    PYPROJECT_VERSION=$(cat pyproject.toml | grep version)
+    echo "version to build: $PYPROJECT_VERSION"
+
+    uv build -q
+    uv pip install dist/*.whl
   fi
 
   # tag the commit on the branch (will be force-moved after lockfile updates)
@@ -128,7 +128,15 @@ for repo in "${REPOS[@]}"; do
   if [ "$repo" == "stack-client-typescript" ]; then
     echo "Uploading llama-$repo to npm"
     cd dist
-    npx yarn publish --access public --tag rc-$VERSION --registry https://registry.npmjs.org/
+    # Try to publish, but don't fail if version already exists
+    if npx yarn publish --access public --tag rc-$VERSION --registry https://registry.npmjs.org/ 2>&1 | tee /tmp/npm-publish.log; then
+      echo "✅ Successfully published to npm"
+    elif grep -q "You cannot publish over the previously published versions" /tmp/npm-publish.log; then
+      echo "⚠️  Version $VERSION already published to npm, skipping..."
+    else
+      echo "❌ Failed to publish to npm"
+      exit 1
+    fi
     cd ..
   else
     echo "Uploading llama-$repo to testpypi"
