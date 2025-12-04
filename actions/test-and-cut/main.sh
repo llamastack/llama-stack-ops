@@ -274,7 +274,6 @@ test_docker() {
     -e LLAMA_STACK_TEST_INFERENCE_MODE=replay \
     -e LLAMA_STACK_TEST_STACK_CONFIG_TYPE=server \
     -e LLAMA_STACK_TEST_MCP_HOST=localhost \
-    -e LLAMA_STACK_TEST_DEBUG=1 \
     -e LLAMA_STACK_TEST_RECORDING_DIR=/app/llama-stack-source/tests/integration/common \
     -v $(pwd)/llama-stack:/app/llama-stack-source \
     distribution-$DISTRO:dev \
