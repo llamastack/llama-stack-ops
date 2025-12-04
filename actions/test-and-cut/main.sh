@@ -78,6 +78,9 @@ fi
 
 DISTRO=starter
 
+# Save the original working directory (GitHub workspace) for log uploads
+WORKSPACE_DIR=$(pwd)
+
 TMPDIR=$(mktemp -d)
 cd $TMPDIR
 
@@ -105,8 +108,8 @@ determine_source_commit_for_repo() {
       git fetch origin "$RELEASE_BRANCH"
 
       # Check if commit is related to the branch (ancestor or descendant)
-      if ! git merge-base --is-ancestor "$COMMIT_HASH" "origin/$RELEASE_BRANCH" && \
-         ! git merge-base --is-ancestor "origin/$RELEASE_BRANCH" "$COMMIT_HASH"; then
+      if ! git merge-base --is-ancestor "$COMMIT_HASH" "origin/$RELEASE_BRANCH" &&
+        ! git merge-base --is-ancestor "origin/$RELEASE_BRANCH" "$COMMIT_HASH"; then
         echo "ERROR: Commit $COMMIT_HASH is not related to branch $RELEASE_BRANCH" >&2
         echo "ERROR: The commit must be an ancestor or descendant of the release branch" >&2
         exit 1
@@ -270,9 +273,19 @@ test_docker() {
     -e SAFETY_MODEL=ollama/llama-guard3:1b \
     -e LLAMA_STACK_TEST_INFERENCE_MODE=replay \
     -e LLAMA_STACK_TEST_STACK_CONFIG_TYPE=server \
+    -e LLAMA_STACK_TEST_MCP_HOST=localhost \
+    -e LLAMA_STACK_TEST_RECORDING_DIR=/app/llama-stack-source/tests/integration/common \
     -v $(pwd)/llama-stack:/app/llama-stack-source \
     distribution-$DISTRO:dev \
     --port $LLAMA_STACK_PORT
+
+  # Cleanup function to save logs and stop container
+  cleanup_docker() {
+    docker logs llama-stack-$DISTRO >"$WORKSPACE_DIR/docker-$DISTRO.log" 2>&1 || true
+    docker stop llama-stack-$DISTRO || true
+  }
+
+  trap cleanup_docker EXIT
 
   # check localhost:$LLAMA_STACK_PORT/health repeatedly until it returns 200
   iterations=0
@@ -289,8 +302,11 @@ test_docker() {
 
   run_integration_tests http://localhost:$LLAMA_STACK_PORT
 
-  # stop the container
-  docker stop llama-stack-$DISTRO
+  # Cleanup: save docker logs and stop the container
+  cleanup_docker
+
+  # Clear the trap since we've cleaned up successfully
+  trap - EXIT
 }
 
 build_packages

@@ -64,6 +64,7 @@ runs:
       run: |
         cat server.log || true
         cat client.log || true
+        cat docker-*.log || true
 
     - name: Upload server logs
       if: always()
