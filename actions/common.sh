@@ -32,9 +32,12 @@ run_integration_tests() {
 
 install_dependencies() {
   uv pip install pytest pytest-asyncio
+
+  # Install all dependencies for distribution (includes mcp and other test deps)
+  llama stack list-deps starter | xargs -L1 uv pip install
 }
 
 test_llama_cli() {
   uv pip list | grep llama
-  llama stack list-apis > /dev/null
+  llama stack list-apis >/dev/null
 }
