@@ -140,19 +140,40 @@ for repo in "${REPOS[@]}"; do
     cd ..
   else
     echo "Uploading llama-$repo to testpypi"
-    python -m twine upload \
+    # Try to upload, but don't fail if version already exists
+    if python -m twine upload \
       --repository-url https://test.pypi.org/legacy/ \
       --skip-existing \
-      dist/*.whl dist/*.tar.gz
+      --verbose \
+      dist/*.whl dist/*.tar.gz 2>&1 | tee /tmp/twine-upload-main.log; then
+      echo "✅ Successfully uploaded llama-$repo to testpypi"
+    elif grep -q "File already exists" /tmp/twine-upload-main.log; then
+      echo "⚠️  Version $VERSION already exists on testpypi for llama-$repo, skipping..."
+    else
+      echo "❌ Failed to upload llama-$repo to testpypi"
+      cat /tmp/twine-upload-main.log
+      exit 1
+    fi
 
     # Upload llama_stack_api if it exists
     if [ "$repo" == "stack" ] && [ -d "src/llama_stack_api" ] && [ -f "src/llama_stack_api/pyproject.toml" ]; then
       echo "Uploading llama_stack_api to testpypi"
       cd src/llama_stack_api
-      python -m twine upload \
+      # Try to upload, but don't fail if version already exists
+      if python -m twine upload \
         --repository-url https://test.pypi.org/legacy/ \
         --skip-existing \
-        dist/*.whl dist/*.tar.gz
+        --verbose \
+        dist/*.whl dist/*.tar.gz 2>&1 | tee /tmp/twine-upload-api.log; then
+        echo "✅ Successfully uploaded llama_stack_api to testpypi"
+      elif grep -q "File already exists" /tmp/twine-upload-api.log; then
+        echo "⚠️  Version $VERSION already exists on testpypi for llama_stack_api, skipping..."
+      else
+        echo "❌ Failed to upload llama_stack_api to testpypi"
+        cat /tmp/twine-upload-api.log
+        cd -
+        exit 1
+      fi
       cd -
     fi
   fi
