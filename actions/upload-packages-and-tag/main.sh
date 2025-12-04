@@ -105,20 +105,20 @@ for repo in "${REPOS[@]}"; do
     npx yarn install
     npx yarn build
   else
-    PYPROJECT_VERSION=$(cat pyproject.toml | grep version)
-    echo "version to build: $PYPROJECT_VERSION"
-
-    uv build -q
-    uv pip install dist/*.whl
-
-    # Build llama_stack_api if it exists
+    # Build llama_stack_api first if it exists (main package depends on it)
     if [ "$repo" == "stack" ] && [ -d "src/llama_stack_api" ] && [ -f "src/llama_stack_api/pyproject.toml" ]; then
-      echo "Building llama_stack_api"
+      echo "Building llama_stack_api first (dependency of llama-stack)"
       cd src/llama_stack_api
       uv build -q
       uv pip install dist/*.whl
       cd -
     fi
+
+    PYPROJECT_VERSION=$(cat pyproject.toml | grep version)
+    echo "version to build: $PYPROJECT_VERSION"
+
+    uv build -q
+    uv pip install dist/*.whl
   fi
 
   # tag the commit on the branch (will be force-moved after lockfile updates)
