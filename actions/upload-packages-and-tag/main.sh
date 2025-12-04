@@ -128,7 +128,15 @@ for repo in "${REPOS[@]}"; do
   if [ "$repo" == "stack-client-typescript" ]; then
     echo "Uploading llama-$repo to npm"
     cd dist
-    npx yarn publish --access public --tag rc-$VERSION --registry https://registry.npmjs.org/
+    # Try to publish, but don't fail if version already exists
+    if npx yarn publish --access public --tag rc-$VERSION --registry https://registry.npmjs.org/ 2>&1 | tee /tmp/npm-publish.log; then
+      echo "✅ Successfully published to npm"
+    elif grep -q "You cannot publish over the previously published versions" /tmp/npm-publish.log; then
+      echo "⚠️  Version $VERSION already published to npm, skipping..."
+    else
+      echo "❌ Failed to publish to npm"
+      exit 1
+    fi
     cd ..
   else
     echo "Uploading llama-$repo to testpypi"
