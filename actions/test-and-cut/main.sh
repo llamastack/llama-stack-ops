@@ -268,13 +268,28 @@ test_docker() {
   # run the container in the background
   export LLAMA_STACK_PORT=8321
 
+  # Conditionally set test environment variables based on llama-stack version
+  # Newer versions (>= 0.4.0) need explicit /v1 suffix and additional test env vars
+  # Older versions (< 0.4.0) auto-append /v1 and don't need the extra vars
+  RECORDING_DIR_ARG=""
+  MCP_HOST_ARG=""
+  if should_set_recording_dir "${VERSION:-0.0.0}"; then
+    echo "Configuring Docker for llama-stack >= 0.4.0 (with /v1, recording dir, MCP host)"
+    OLLAMA_URL_VALUE="http://localhost:11434/v1"
+    RECORDING_DIR_ARG="-e LLAMA_STACK_TEST_RECORDING_DIR=/app/llama-stack-source/tests/integration/common"
+    MCP_HOST_ARG="-e LLAMA_STACK_TEST_MCP_HOST=localhost"
+  else
+    echo "Configuring Docker for llama-stack < 0.4.0 (no /v1 suffix, using defaults)"
+    OLLAMA_URL_VALUE="http://localhost:11434"
+  fi
+
   docker run -d --network host --name llama-stack-$DISTRO -p $LLAMA_STACK_PORT:$LLAMA_STACK_PORT \
-    -e OLLAMA_URL=http://localhost:11434/v1 \
+    -e OLLAMA_URL=$OLLAMA_URL_VALUE \
     -e SAFETY_MODEL=ollama/llama-guard3:1b \
     -e LLAMA_STACK_TEST_INFERENCE_MODE=replay \
     -e LLAMA_STACK_TEST_STACK_CONFIG_TYPE=server \
-    -e LLAMA_STACK_TEST_MCP_HOST=localhost \
-    -e LLAMA_STACK_TEST_RECORDING_DIR=/app/llama-stack-source/tests/integration/common \
+    $MCP_HOST_ARG \
+    $RECORDING_DIR_ARG \
     -v $(pwd)/llama-stack:/app/llama-stack-source \
     distribution-$DISTRO:dev \
     --port $LLAMA_STACK_PORT
