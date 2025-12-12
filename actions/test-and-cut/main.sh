@@ -204,7 +204,8 @@ build_packages() {
 
       # this is applicable for llama-stack repo but we should not do it when
       # LLAMA_STACK_ONLY is true
-      perl -pi -e "s/llama-stack-client>=.*/llama-stack-client>=$VERSION\",/" pyproject.toml
+      # Use exact version match (==) to ensure client and stack versions match exactly
+      perl -pi -e "s/llama-stack-client>=.*/llama-stack-client==$VERSION\",/" pyproject.toml
     fi
 
     if [ "$repo" == "stack-client-typescript" ]; then
