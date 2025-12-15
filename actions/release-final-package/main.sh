@@ -190,7 +190,8 @@ add_bump_version_commit() {
       # Only update client dependency for non-dev versions
       # Dev versions (e.g., 0.1.1.dev0) should keep the last stable client dependency
       if [[ ! "$version" =~ \.dev ]]; then
-        perl -pi -e "s/llama-stack-client>=.*,/llama-stack-client>=$version\",/" pyproject.toml
+        # Match both == and >= to handle upgrading from RC (which uses ==) to final release
+        perl -pi -e "s/llama-stack-client(==|>=).*\\\",/llama-stack-client==$version\\\",/" pyproject.toml
 
         if [ "$repo" == "stack" ]; then
           # Handle both old (llama_stack/ui) and new (src/llama_stack_ui) paths
